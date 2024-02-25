@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.future import select
 from sqlite3 import Connection
+from exceptions import HTTPException
 
 
 class UserBase(SQLModel):
@@ -30,6 +31,11 @@ class DocumentBase(SQLModel):
 
 class Document(DocumentBase, table=True):
     id: int = Field(primary_key=True)
+
+
+class DocumentUpdate(DocumentBase):
+    id: int
+    content: str | None
 
 
 sqlite_file_name = "sharenotes.db"
@@ -69,8 +75,30 @@ async def create_user(s: AsyncSession, uc: UserCreate):
     user = User(**uc.model_dump(exclude_unset=True))
     s.add(user)
     await s.commit()
-    await s.refresh(user)
     return user
+
+
+async def read_document(s: AsyncSession, document_id: int):
+    doc = await s.get(Document, document_id)
+    return doc
+
+
+async def create_document(s: AsyncSession, doc_id: int):
+    doc = Document(id=doc_id, content="")
+    s.add(doc)
+    await s.commit()
+    return doc
+
+
+async def update_document(s: AsyncSession, du: DocumentUpdate):
+    doc = await read_document(s, du.id)
+    if not doc:
+        raise HTTPException(404, f"document ID: {du.id} not found")
+    if du.content:
+        doc.content = du.content
+    await s.commit()
+    await s.refresh(doc)
+    return doc
 
 
 @event.listens_for(engine.sync_engine, "connect")
