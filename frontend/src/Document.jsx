@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import './App.css';
 
 export default function Document() {
   const [textValue, setTextValue] = useState("");
   const ws = useRef(null);
+
+  // get document name provided via router-dom functionality
+  const location = useLocation();
+  let docName = location.state.docName;
 
   useEffect(() => {
     ws.current = new WebSocket('ws://localhost:8000/ws');
@@ -35,7 +40,7 @@ export default function Document() {
   return (
     <div className="mainContainer">
       <nav className="navBar">
-        <h2 className="logoText">📕 Document</h2>
+        <h2 className="logoText">📕 {docName}</h2>
       </nav>
       <div className="textContainer">
         <div className="container">
