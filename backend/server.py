@@ -42,7 +42,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     while True:
         data = await websocket.receive_text()
-        # Parse received JSON data
+
         parsed_data = json.loads(data)
         lineNumber = parsed_data['line']
         data = parsed_data['data']
