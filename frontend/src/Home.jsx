@@ -8,10 +8,15 @@ const Home = () => {
     navigate(`/document`);
   };
 
+  const navigateToExistingDocument = () => {
+    // implement logic
+}
+
   return (
     <div>
       <h1>Welcome</h1>
       <button onClick={navigateToNewDocument}>New Document</button>
+      <button onClick={navigateToExistingDocument}>Link to Existing Document</button>
     </div>
   );
 };
