@@ -1,5 +1,6 @@
+from __future__ import annotations
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 from sqlmodel import Field, SQLModel
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
@@ -35,7 +36,7 @@ class Document(DocumentBase, table=True):
 
 class DocumentUpdate(DocumentBase):
     id: int
-    content: str | None
+    content: Optional[str]
 
 
 sqlite_file_name = "sharenotes.db"

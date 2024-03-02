@@ -6,7 +6,15 @@ export default function Document() {
   const ws = useRef(null);
 
   useEffect(() => {
-    ws.current = new WebSocket('ws://localhost:8000/ws');
+    ws.current = new WebSocket('ws://localhost:8000/ws/1');
+    ws.current.onopen = () => {
+      console.log('WebSocket Connected');
+    };
+    ws.current.onmessage = (event) => {
+      console.log('Message from server ', event.data);
+      setTextValue(event.data);
+    };
+    ws.current.onclose = () => console.log('WebSocket Disconnected');
     return () => {
       if (ws.current) {
         ws.current.close();
@@ -15,22 +23,14 @@ export default function Document() {
   }, []);
 
   function handleUpdate(event) {
-    const { value, selectionStart } = event.target;
+    const { value } = event.target;
     setTextValue(value);
 
-    // Calculate the current line number and data
-    const lines = value.substr(0, selectionStart).split('\n');
-    const lineNumber = lines.length;
-    const currentLineData = lines[lines.length - 1] + value.substr(selectionStart).split('\n')[0];
-
-    console.log(`Line Number: ${lineNumber}, Line Data: '${currentLineData}'`);
-
-    // Send the line number and data if the WebSocket connection is open
+    // Send textValue if the ws is open
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ line: lineNumber, data: currentLineData }));
+      ws.current.send(JSON.stringify({ content: value }));
     }
   }
-
 
   return (
     <div className="mainContainer">

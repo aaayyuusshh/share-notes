@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
+import json
 
 from db import (
     DocumentUpdate,
@@ -97,6 +98,7 @@ manager = ConnectionManager()
 
 @app.websocket("/ws/{document_id}")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, s: Session):
+    print("running")
     await manager.connect(websocket)
 
     doc = await read_document(s, document_id)
@@ -108,7 +110,13 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, s: Session)
     try:
         while True:
             data = await websocket.receive_text()
-            doc = await update_document(s, DocumentUpdate(content=data, id=document_id))
+            print(data)
+            # parse data json
+            data = json.loads(data)['content']
+            if data == "":
+                doc = await update_document(s, DocumentUpdate(content=None, id=document_id))
+            else:
+                doc = await update_document(s, DocumentUpdate(content=data, id=document_id))
             await manager.broadcast(doc.content)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
