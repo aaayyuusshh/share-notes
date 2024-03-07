@@ -55,7 +55,7 @@ html = """
         <content id='document'>
         </content>
         <script>
-            var ws = new WebSocket("ws://localhost:8000/ws/1");
+            var ws = new WebSocket("ws://0.0.0.0:8000/ws/1");
             var input = document.getElementById("messageText");
             ws.onmessage = function(event) {
                 var doc = document.getElementById('document');

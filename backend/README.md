@@ -1,6 +1,9 @@
-```bash
-# using python 3.11 + 
+# Running on a Docker Container
+docker build -t share-note-server .
+docker run -p 8000:8000 share-note-server
 
+
+# Running natively on python 3.11 + 
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
