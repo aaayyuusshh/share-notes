@@ -29,11 +29,6 @@ class DocumentUpdate(DocumentBase):
     content: Optional[str]
 
 
-class DocumentUpdate(DocumentBase):
-    id: int
-    content: Optional[str]
-
-
 sqlite_file_name = "sharenotes.db"
 sqlite_url = f"sqlite+aiosqlite:///{sqlite_file_name}"
 
@@ -96,29 +91,6 @@ async def update_document(s: AsyncSession, du: DocumentUpdate):
     doc = await read_document(s, du.id)
     logger.info(doc)
     logger.info(doc.content)
-    if not doc:
-        raise HTTPException(404, f"document ID: {du.id} not found")
-    if du.content:
-        doc.content = du.content
-    await s.commit()
-    await s.refresh(doc)
-    return doc
-
-
-async def read_document(s: AsyncSession, document_id: int):
-    doc = await s.get(Document, document_id)
-    return doc
-
-
-async def create_document(s: AsyncSession, doc_id: int):
-    doc = Document(id=doc_id, content="")
-    s.add(doc)
-    await s.commit()
-    return doc
-
-
-async def update_document(s: AsyncSession, du: DocumentUpdate):
-    doc = await read_document(s, du.id)
     if not doc:
         raise HTTPException(404, f"document ID: {du.id} not found")
     if du.content:
