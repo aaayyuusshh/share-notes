@@ -1,12 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useParams } from "react-router-dom";
 import './App.css';
 
 export default function Document() {
   const [textValue, setTextValue] = useState("");
   const ws = useRef(null);
 
+  const { id, docName } = useParams()
+
+  // get document name provided via router-dom functionality
+  //const location = useLocation();
+  //let docName = location.state.docName;
+  //let docID = location.state.docID;
+
   useEffect(() => {
-    ws.current = new WebSocket('ws://localhost:8000/ws/1');
+    ws.current = new WebSocket('ws://localhost:8000/ws/' + id + '/' + docName);
     ws.current.onopen = () => {
       console.log('WebSocket Connected');
     };
@@ -16,7 +25,7 @@ export default function Document() {
     };
     ws.current.onclose = () => console.log('WebSocket Disconnected');
     return () => {
-      if (ws.current) {
+      if (!ws.current) {
         ws.current.close();
       }
     };
@@ -35,7 +44,7 @@ export default function Document() {
   return (
     <div className="mainContainer">
       <nav className="navBar">
-        <h2 className="logoText">📕 Document</h2>
+        <h2 className="logoText">📕 {docName}</h2>
       </nav>
       <div className="textContainer">
         <div className="container">
@@ -54,3 +63,23 @@ export default function Document() {
     </div>
   );
 }
+
+// function to handle updates line by line (was overwritten in main branch had a copy in my local branch -Dvij)
+/*
+  function handleUpdate(event) {
+    const { value, selectionStart } = event.target;
+    setTextValue(value);
+
+    // Calculate the current line number and data
+    const lines = value.substr(0, selectionStart).split('\n');
+    const lineNumber = lines.length;
+    const currentLineData = lines[lines.length - 1] + value.substr(selectionStart).split('\n')[0];
+
+    console.log(`Line Number: ${lineNumber}, Line Data: '${currentLineData}'`);
+
+    // Send the line number and data if the WebSocket connection is open
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({ line: lineNumber, data: currentLineData }));
+    }
+  }
+*/
