@@ -17,6 +17,7 @@ from db import (
     session,
     update_document,
 )
+import websockets
 
 Session = Annotated[AsyncSession, Depends(session)]
 
@@ -104,8 +105,25 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
             logger.info(data)
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
             await manager.broadcast(doc.content)
+
+            response = await connect_to_replica2(document_id, docName, doc.content)
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+# create websocket to connect to replica2 on port 8001
+async def connect_to_replica2(document_id: int, docName: str, content: str):
+    uri = f"ws://localhost:8001/replica/ws/{document_id}/{docName}"
+    async with websockets.connect(uri) as websocket:
+        print("Connected to replica2")
+        await websocket.send(json.dumps({
+            "content": content
+        }))
+        response = await websocket.recv()
+        print(response)
+        return response
+
+
 
 
 """

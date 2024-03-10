@@ -71,6 +71,13 @@ async def create_document(s: AsyncSession, docName: str):
     await s.refresh(doc)
     return doc.id
 
+async def create_repl_document(s: AsyncSession, docName: str, docId: int):
+    doc = Document(id=docId, name=docName, content="")
+    s.add(doc)
+    await s.commit()
+    await s.refresh(doc)
+
+
 
 async def create_document_with_content(s: AsyncSession, docName: str, docContent: str):
     doc = Document(name=docName, content=docContent)
