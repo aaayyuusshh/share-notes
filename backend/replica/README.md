@@ -10,6 +10,7 @@ docker run -p 8000:8002 share-note-server
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn server:app --reload
+chmod +x ./run.sh
+./run.sh <PORT>
 
 # go to the <url>/docs
