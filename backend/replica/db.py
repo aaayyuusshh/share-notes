@@ -12,31 +12,43 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.future import select
 from sqlite3 import Connection
 from exceptions import HTTPException
+from settings import settings
+from pathlib import Path
+
 
 class DocumentBase(SQLModel):
     name: str
     content: str
 
+
 class DocumentList(SQLModel):
     id: int
     name: str
 
+
 class Document(DocumentBase, table=True):
     id: int = Field(primary_key=True)
+
 
 class DocumentUpdate(DocumentBase):
     id: int
     content: Optional[str]
 
 
-sqlite_file_name = "sharenotes.db"
-sqlite_url = f"sqlite+aiosqlite:///{sqlite_file_name}"
+REPLICA_DIR = Path(__file__).parent.resolve() / "dbs"
+
+if not REPLICA_DIR.is_dir():
+    REPLICA_DIR.mkdir()
+
+sqlite_path = REPLICA_DIR / f"sharenotes_{settings.port}.db"
+sqlite_url = f"sqlite+aiosqlite:///{sqlite_path}"
 
 connect_args = {"check_same_thread": False}
 engine = create_async_engine(sqlite_url, echo=True, connect_args=connect_args)
 SessionMaker = async_sessionmaker(autocommit=False, bind=engine)
 
 logger = logging.getLogger("uvicorn")
+
 
 @asynccontextmanager
 async def connect():
@@ -46,6 +58,7 @@ async def connect():
         except:
             conn.rollback()
             raise
+
 
 async def session() -> AsyncGenerator[AsyncSession, Any]:
     async with SessionMaker() as session:
@@ -111,8 +124,6 @@ def set_sqlite_pragma(dbapi_connection: Connection, _connection_record):
 async def create_all():
     async with connect() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
-
-
 
 
 """
