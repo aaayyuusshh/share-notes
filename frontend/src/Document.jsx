@@ -7,15 +7,11 @@ export default function Document() {
   const [textValue, setTextValue] = useState("");
   const ws = useRef(null);
 
-  const { id, docName } = useParams()
-
-  // get document name provided via router-dom functionality
-  //const location = useLocation();
-  //let docName = location.state.docName;
-  //let docID = location.state.docID;
+  const { port, id, docName } = useParams()
 
   useEffect(() => {
-    ws.current = new WebSocket('ws://localhost:8000/ws/' + id + '/' + docName);
+    // The port is passed as a paramter in the URL, ideally it would not be shown to the user (currently not transparent)
+    ws.current = new WebSocket('ws://localhost:' + port + '/ws/' + id + '/' + docName);
     ws.current.onopen = () => {
       console.log('WebSocket Connected');
     };

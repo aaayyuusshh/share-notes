@@ -16,8 +16,8 @@ from db import (
     read_document,
     session,
     update_document,
+    create_repl_document
 )
-import websockets
 
 Session = Annotated[AsyncSession, Depends(session)]
 
@@ -61,11 +61,10 @@ manager = ConnectionManager()
 logger = logging.getLogger("uvicorn")
 
 
-@app.post("/newDocID/{docName}")
-async def create_docID(s: Session, docName: str):
+@app.post("/newDocID/")
+async def create_docID(s: Session, docName: str = Body()):
     docID = await create_document(s, docName)
-    # hard coded passing of the port number, should be done in master
-    return {"docID": docID, "port": 8001}
+    return {"docID": docID}
 
 
 @app.post("/createDoc/", response_model=Document)
@@ -106,26 +105,34 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
             logger.info(data)
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
             await manager.broadcast(doc.content)
-
-            response = await connect_to_replica2(document_id, docName, doc.content)
-
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-# create websocket to connect to replica2 on port 8002
-async def connect_to_replica2(document_id: int, docName: str, content: str):
-    uri = f"ws://localhost:8002/replica/ws/{document_id}/{docName}"
-    async with websockets.connect(uri) as websocket:
-        print("Connected to replica2")
-        await websocket.send(json.dumps({
-            "content": content
-        }))
-        response = await websocket.recv()
-        print(response)
-        return response
 
+@app.websocket("/replica/ws/{document_id}/{docName}")
+async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
+    await manager.connect(websocket)
+    print(f"Connected to document {document_id} with name {docName}")
 
+    doc = await read_document(s, document_id)
 
+    # shouldn't happen
+    if not doc:
+        logger.info("Document had to be created, something went wrong")
+        await create_repl_document(s, docName, document_id)
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(docName)
+            print(data)
+            # parse data json
+            data = json.loads(data)['content']
+
+            doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
+            await websocket.send_text("ack from replica2")
+    except WebSocketDisconnect:
+        print(f"Connection closed with exception")
 
 """
 @app.get("/users/")

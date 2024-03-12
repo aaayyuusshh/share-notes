@@ -22,17 +22,20 @@ const Home = () => {
     })
     .then((response) => response.json())
     .then((data) => {
+      console.log(data.port.toString())
       console.log(data.docID.toString())
+      const port = data.port.toString()
       const docID = data.docID.toString()
       console.log(docID)
       console.log(docName)
-      navigate(`/document/` + docID + '/' + docName);
+      navigate(`/document/` + port + '/' + docID + '/' + docName);
     })
     return
   };
 
   const navigateToExistingDocument = () => {
-    navigate(`/document/` + idSelected + '/' + nameSelected);
+    // TODO: Hard coded port of 8001, it should instead ask the master what port to use
+    navigate(`/document/8001/` + idSelected + '/' + nameSelected);
   };
 
   // Get Document List from the server
