@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import logging
 from sqlalchemy.future import select
+import os
 from db import (
     DocumentUpdate,
     Document,
@@ -20,6 +21,7 @@ from db import (
 )
 import websockets
 
+
 Session = Annotated[AsyncSession, Depends(session)]
 
 @asynccontextmanager
@@ -28,6 +30,9 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
+MY_PORT = os.getenv('PORT')
+print(MY_PORT)
+
 
 origins = [
     "http://localhost:5173",
@@ -40,7 +45,6 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
-
 
 class ConnectionManager:
     def __init__(self):
@@ -82,8 +86,10 @@ async def doc_list(s: Session) -> Any:
     return docList
 
 
+
 @app.websocket("/ws/{document_id}/{docName}")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
+    print("My port is: ", MY_PORT)
     logger.info("running")
     await manager.connect(websocket)
 
@@ -108,22 +114,33 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
             await manager.broadcast(doc.content)
 
-            response = await connect_to_replica2(document_id, docName, doc.content)
+            for port in range(8001, 8006):
+                if port == MY_PORT:
+                    continue
+                response = await connect_to_replica(document_id, docName, doc.content, port)
+
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-# create websocket to connect to replica2 on port 8002
-async def connect_to_replica2(document_id: int, docName: str, content: str):
-    uri = f"ws://localhost:8002/replica/ws/{document_id}/{docName}"
-    async with websockets.connect(uri) as websocket:
-        print("Connected to replica2")
-        await websocket.send(json.dumps({
-            "content": content
-        }))
-        response = await websocket.recv()
-        print(response)
-        return response
+# create websocket to connect to replica
+async def connect_to_replica(document_id: int, docName: str, content: str, port: int):
+    uri = f"ws://localhost:{port}/replica/ws/{document_id}/{docName}"
+    try:
+        async with websockets.connect(uri) as websocket:
+            print(f"Connected to replica {uri}")
+            await websocket.send(json.dumps({
+                "content": content
+            }))
+            response = await websocket.recv()
+            print(response, f", {MY_PORT}")
+            return response
+    except ConnectionRefusedError:
+        print(f"Failed to connect to {uri}. Connection refused.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        raise
+
 
 
 @app.websocket("/replica/ws/{document_id}/{docName}")
@@ -147,7 +164,8 @@ async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, doc
             data = json.loads(data)['content']
 
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
-            await websocket.send_text("ack from replica2")
+            print(f"{MY_PORT}")
+            await websocket.send_text(f"ack from replica {MY_PORT}")
     except WebSocketDisconnect:
         print(f"Connection closed with exception")
 
