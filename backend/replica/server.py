@@ -61,10 +61,11 @@ manager = ConnectionManager()
 logger = logging.getLogger("uvicorn")
 
 
-@app.post("/newDocID/")
-async def create_docID(s: Session, docName: str = Body()):
+@app.post("/newDocID/{docName}")
+async def create_docID(s: Session, docName: str):
     docID = await create_document(s, docName)
-    return {"docID": docID}
+    # hard coded passing of the port number, should be done in master
+    return {"docID": docID, "port": 8001}
 
 
 @app.post("/createDoc/", response_model=Document)
@@ -111,9 +112,9 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-# create websocket to connect to replica2 on port 8001
+# create websocket to connect to replica2 on port 8002
 async def connect_to_replica2(document_id: int, docName: str, content: str):
-    uri = f"ws://localhost:8001/replica/ws/{document_id}/{docName}"
+    uri = f"ws://localhost:8002/replica/ws/{document_id}/{docName}"
     async with websockets.connect(uri) as websocket:
         print("Connected to replica2")
         await websocket.send(json.dumps({
