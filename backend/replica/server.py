@@ -16,6 +16,7 @@ from db import (
     read_document,
     session,
     update_document,
+    create_repl_document
 )
 import websockets
 
@@ -125,7 +126,30 @@ async def connect_to_replica2(document_id: int, docName: str, content: str):
         return response
 
 
+@app.websocket("/replica/ws/{document_id}/{docName}")
+async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
+    await manager.connect(websocket)
+    print(f"Connected to document {document_id} with name {docName}")
 
+    doc = await read_document(s, document_id)
+
+    # shouldn't happen
+    if not doc:
+        logger.info("Document had to be created, something went wrong")
+        await create_repl_document(s, docName, document_id)
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(docName)
+            print(data)
+            # parse data json
+            data = json.loads(data)['content']
+
+            doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
+            await websocket.send_text("ack from replica2")
+    except WebSocketDisconnect:
+        print(f"Connection closed with exception")
 
 """
 @app.get("/users/")
