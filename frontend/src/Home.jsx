@@ -6,6 +6,15 @@ const Home = () => {
   const [docList, setDocList] = useState([]);
   const [idSelected, setIdSelected] = useState("");
   const [nameSelected, setNameSelected] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const filteredDocList = docList.filter(([index, doc]) =>
+    doc.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handleChange = (e) => setDocName(e.target.value);
 
@@ -51,38 +60,96 @@ const Home = () => {
 
   return (
     <>
-      <div className="homePage">
-        <h1>Welcome to Share Notes</h1>
-        <input
-          type="text"
-          placeholder="provide document name..."
-          value={docName}
-          onChange={handleChange}/>
-        <button disabled={!docName} onClick={navigateToNewDocument}>Create New Doc</button>
+    <div className="homePage" style={{ textAlign: 'center', padding: '20px', backgroundColor: '#f0f0f0' }}>
+      <h1 style={{ color: '#333' }}>Welcome to Share Notes</h1>
+      <input
+        type="text"
+        placeholder="Provide a new document name..."
+        value={docName}
+        onChange={handleChange}
+        style={{ padding: '8px', margin: '10px', width: '60%', borderRadius: '4px', border: '1px solid #ccc' }}
+      />
+      <button
+        disabled={!docName}
+        onClick={navigateToNewDocument}
+        style={{
+          padding: '8px 15px',
+          backgroundColor: '#4CAF50',
+          color: 'white',
+          border: 'none',
+          borderRadius: '20px',
+          cursor: 'pointer',
+        }}
+      >
+        Create New Doc
+      </button>
+    </div>
+    <div style={{ textAlign: 'center', marginTop: '20px' }}>
+      <h2 style={{ color: '#333' }}>Document List</h2>
+      <input
+        type="text"
+        placeholder="Search by document name..."
+        value={searchTerm}
+        onChange={handleSearchChange}
+        style={{
+          padding: '8px',
+          margin: '10px',
+          width: '60%',
+          borderRadius: '4px',
+          border: '1px solid #ccc',
+        }}
+      />
+      <div
+        style={{
+          height: '40vh',
+          overflowY: 'auto',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          {filteredDocList.map(([index, doc], i) => (
+            <button
+              key={index}
+              onClick={() => {
+                setIdSelected(doc.id);
+                setNameSelected(doc.name);
+              }}
+              style={{
+                width: '60%',
+                padding: '15px',
+                backgroundColor: i % 2 === 0 ? 'white' : '#f0f0f0',
+                border: 'none',
+                borderRadius: '8px',
+                marginBottom: '5px',
+                cursor: 'pointer',
+                outline: 'none',
+                transition: 'background-color 0.3s ease-in-out',
+                ...(idSelected === doc.id && { backgroundColor: '#4285F4', color: 'white' }),
+              }}
+            >
+              {`${doc.id}: ${doc.name}`}
+            </button>
+          ))}
+        </div>
       </div>
-      <div>
-        <h2>Document List</h2>
-          <select defaultValue=""
-            onChange={(e) => {
-            console.log(docList[e.target.value][1].id)
-            console.log(docList[e.target.value][1].name)
-            // Set the id and name of the document user currently selected
-            setIdSelected(docList[e.target.value][1].id)
-            setNameSelected(docList[e.target.value][1].name)
-          }}>
-            <option disabled={true} value=""> --Please choose an option-- </option>
-            {docList.map(([index, doc]) => {
-              return (
-                <option key={index} value={index}>
-                  {`${doc.id}: ${doc.name}`}
-                </option>
-              );
-            })}
-          </select>
-        <button disabled={!idSelected} onClick={navigateToExistingDocument}>Open selected document</button>
-      </div>
-    </>
-  );
+      <button
+        disabled={!idSelected}
+        onClick={navigateToExistingDocument}
+        style={{
+          padding: '8px 15px',
+          marginTop: '20px',
+          backgroundColor: '#4285F4',
+          color: 'white',
+          border: 'none',
+          borderRadius: '20px',
+          cursor: 'pointer',
+        }}
+      >
+        Open Selected Document
+      </button>
+    </div>
+  </>
+  );  
+  
 };
 
 export default Home;
