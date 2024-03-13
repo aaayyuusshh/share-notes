@@ -8,7 +8,7 @@ To start the backend server, navigate to the `backend/replica` directory and exe
 cd backend/replica
 ./run.sh 8001 8005
 ```
-This command sets up and runs backend servers on ports 8001 to 8005.
+This command sets up and runs the master backend server on port 8000 and replication servers on ports 8001 to 8005.
 
 ## Running the Frontend 🌐
 To run the frontend, navigate to the frontend directory and run the following commands:
