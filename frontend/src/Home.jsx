@@ -72,11 +72,11 @@ const Home = () => {
   const getDocList = async () => {
     const response = await fetch('http://127.0.0.1:8000/docList/')
     setDocList(Object.entries(await response.json()))
+    console.log(response)
   }
 
   useEffect(() => {
     getDocList()
-    console.log(docList)
   }, []);
 
   return (

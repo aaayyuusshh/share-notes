@@ -38,22 +38,25 @@ export default function Document() {
 
   const requestNewIPAndPort = () => {
     try {
-      const response = fetch('http://127.0.0.1:8000/lostConnection/', {
+      fetch('http://127.0.0.1:8000/lostConnection/', {
         method: "POST",
         header: {
           "Content-Type": "application/json",
         },
         body: id,
       })
-
-      if (response.ok) {
-        const { IP, port } = response.json();
-        console.log(IP)
-        console.log(port)
+      .then((response) => response.json())
+      .then((data) => {
+      const IP = data.IP.toString()
+      const port = data.port.toString()
+      console.log(IP)
+      console.log(port)
+      if (IP && port) {
         reconnectWebSocket(IP, port);
       } else {
         console.error('Failed to get new IP and port');
       }
+    })
     } catch (error) {
       console.error('Error fetching new IP and port:', error);
     }

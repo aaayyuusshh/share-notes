@@ -8,7 +8,6 @@ import logging
 from sqlmodel import Field, SQLModel
 from threading import Lock
 import json
-import queue
 import heapq
 
 class DocumentBase(SQLModel):
@@ -52,7 +51,7 @@ lock = Lock() # NOTE: Lock is from threading, might have to use multiprocesser l
 # Tracking doc-primary_replica-clients coupling
 d_pr_c = {}
 pq = []
-dead_servers = set()
+# dead_servers = set()
 
 # TODO: a return to home screen and save button which will inform the server when a clinet disconnected 
 # NOTE: This can be done in the disconnect exception handling in the actual replica
@@ -116,7 +115,7 @@ async def conn_to_existing_doc(docID: str = Body()):
         d_pr_c[docID][1] += 1 # increment number of connections for that document by 1
     else:
         head = heapq.heappop(pq) # Get replica server with the least amount of documents open
-        while head in dead_servers: # remove dead servers from pq (not ideal but you cant search a heap)
+        while head[2] not in server_list: # remove dead servers from pq (not ideal but you cant search a heap)
             head = heapq.heappop(pq)
         d_pr_c[docID] = [head[2], 1, True, 0] # third item in pq tuple is the IP:PORT and set number of readers to 1
         heapq.heappush(pq, (head[0]+1, head[1], head[2]))
@@ -138,13 +137,16 @@ async def transfer_conn(docID: str = Body()):
     if d_pr_c[docID][2]:
         logger.info("Value added to set:")
         logger.info(d_pr_c[docID][0])
-        dead_servers.add(d_pr_c[docID][0]) # add the server to the list of dead server
+        server_list.remove(d_pr_c[docID][0]) # remove the server from the active lit of servers
+        #dead_servers.add(d_pr_c[docID][0]) # add the server to the list of dead server
 
         head = heapq.heappop(pq) # Get replica server with the least amount of documents open
         logger.info("Head before loop:")
         logger.info(head)
-        while head[0] in dead_servers: # remove dead servers from pq (not ideal but you cant search a heap)
+        while head[2] not in server_list: # remove dead servers from pq (not ideal but you cant search a heap)
             head = heapq.heappop(pq)
+            if not pq:
+                return {"Error": "no servers online to connect too"}
         logger.info("Head after loop:")
         logger.info(head)
         d_pr_c[docID][0] = head[2]
