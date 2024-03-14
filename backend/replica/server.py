@@ -192,6 +192,7 @@ async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, doc
             print(f"{MY_PORT}")
             await websocket.send_text(f"ack from replica {MY_PORT}")
     except WebSocketDisconnect:
+        manager.disconnect(websocket)
         print(f"Connection closed with exception")
 
 """
