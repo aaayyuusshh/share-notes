@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.future import select
 from sqlite3 import Connection
 from exceptions import HTTPException
-from settings import settings
+#from settings import settings
 from pathlib import Path
-
+import os
 
 class DocumentBase(SQLModel):
     name: str
@@ -35,12 +35,15 @@ class DocumentUpdate(DocumentBase):
     content: Optional[str]
 
 
+# NOTE: Remove this later for me the settings file does not work so I got the enviroment variable instead
+MY_PORT = os.getenv('PORT')
+
 REPLICA_DIR = Path(__file__).parent.resolve() / "dbs"
 
 if not REPLICA_DIR.is_dir():
     REPLICA_DIR.mkdir()
 
-sqlite_path = REPLICA_DIR / f"sharenotes_{settings.port}.db"
+sqlite_path = REPLICA_DIR / f"sharenotes_{MY_PORT}.db"
 sqlite_url = f"sqlite+aiosqlite:///{sqlite_path}"
 
 connect_args = {"check_same_thread": False}
@@ -70,10 +73,7 @@ async def session() -> AsyncGenerator[AsyncSession, Any]:
 
 
 async def read_document(s: AsyncSession, document_id: int):
-    logger.info("DB")
-    logger.info(document_id)
     doc = await s.get(Document, document_id)
-    logger.info(doc)
     return doc
 
 
@@ -108,14 +108,17 @@ async def doc_list(s: AsyncSession):
 
 async def update_document(s: AsyncSession, du: DocumentUpdate):
     doc = await read_document(s, du.id)
+    logger.info("Document before update")
     logger.info(doc)
-    logger.info(doc.content)
     if not doc:
         raise HTTPException(404, f"document ID: {du.id} not found")
     if du.content:
         doc.content = du.content
     await s.commit()
     await s.refresh(doc)
+    doc = await read_document(s, du.id)
+    logger.info("Document after update")
+    logger.info(doc)
     return doc
 
 

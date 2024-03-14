@@ -5,10 +5,71 @@ import './App.css';
 
 export default function Document() {
   const [textValue, setTextValue] = useState("");
-  const ws = useRef(null);
+  //const ws = useRef(null);
 
   const { port, id, docName } = useParams()
 
+  const [webSocket, setWebSocket] = useState(null);
+
+
+  useEffect(() => {
+    connectWebSocket(port, id, docName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const connectWebSocket = (port, id, docName) => {
+    const ws = new WebSocket('ws://localhost:' + port + '/ws/' + id + '/' + docName);
+
+    ws.onopen = () => {
+      console.log('WebSocket Connected');
+    };
+    ws.onmessage = (event) => {
+      console.log('Message from server ', event.data);
+      setTextValue(event.data);
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      requestNewIPAndPort();
+    };
+
+    setWebSocket(ws);
+  };
+
+  const requestNewIPAndPort = () => {
+    try {
+      const response = fetch('http://127.0.0.1:8000/lostConnection/', {
+        method: "POST",
+        header: {
+          "Content-Type": "application/json",
+        },
+        body: id,
+      })
+
+      if (response.ok) {
+        const { IP, port } = response.json();
+        console.log(IP)
+        console.log(port)
+        reconnectWebSocket(IP, port);
+      } else {
+        console.error('Failed to get new IP and port');
+      }
+    } catch (error) {
+      console.error('Error fetching new IP and port:', error);
+    }
+  };
+
+  const reconnectWebSocket = (IP, port) => {
+    // Close the previous WebSocket connection
+    if (webSocket) {
+      webSocket.close();
+    }
+    // Establish a new WebSocket connection with the new IP and port
+    connectWebSocket(port, id, docName);
+  };
+
+  
+  /*
   useEffect(() => {
     // The port is passed as a paramter in the URL, ideally it would not be shown to the user (currently not transparent)
     ws.current = new WebSocket('ws://localhost:' + port + '/ws/' + id + '/' + docName);
@@ -19,21 +80,24 @@ export default function Document() {
       console.log('Message from server ', event.data);
       setTextValue(event.data);
     };
-    ws.current.onclose = () => console.log('WebSocket Disconnected');
+    ws.current.onclose = () => {
+      console.log('WebSocket Disconnected');
+    }
     return () => {
       if (!ws.current) {
         ws.current.close();
       }
     };
   }, []);
+  */
 
   function handleUpdate(event) {
     const { value } = event.target;
     setTextValue(value);
 
     // Send textValue if the ws is open
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ content: value }));
+    if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+      webSocket.send(JSON.stringify({ content: value }));
     }
   }
 
