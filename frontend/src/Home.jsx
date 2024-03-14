@@ -13,7 +13,7 @@ const Home = () => {
 
   const navigateToNewDocument = () => {
     console.log(docName)
-    fetch('http://127.0.0.1:8000/newDocID/', {
+    fetch('http://127.0.0.1:8000/createDocAndConnect/', {
       method: "POST",
       header: {
         "Content-Type": "application/json",
@@ -22,20 +22,41 @@ const Home = () => {
     })
     .then((response) => response.json())
     .then((data) => {
-      console.log(data.port.toString())
-      console.log(data.docID.toString())
-      const port = data.port.toString()
       const docID = data.docID.toString()
+      const docName = data.docName.toString()
+      const IP = data.IP.toString()
+      const port = data.port.toString()
       console.log(docID)
       console.log(docName)
+      console.log(IP)
+      console.log(port)
+      // TODO: Pass these variabes as states (or something else, I don't really know JS...) include IP in those variables
+      // currently this only connects to 127.0.0.1 (i.e. localhost) 
       navigate(`/document/` + port + '/' + docID + '/' + docName);
     })
-    return
+    //return // Commented out
   };
 
   const navigateToExistingDocument = () => {
-    // TODO: Hard coded port of 8001, it should instead ask the master what port to use
-    navigate(`/document/8001/` + idSelected + '/' + nameSelected);
+    console.log(idSelected)
+    console.log(nameSelected)
+    fetch('http://127.0.0.1:8000/connectToExistingDoc/', {
+      method: "POST",
+      header: {
+        "Content-Type": "application/json",
+      },
+      body: idSelected,
+    })
+    .then((response) => response.json())
+    .then((data) => {
+      const IP = data.IP.toString()
+      const port = data.port.toString()
+      console.log(IP)
+      console.log(port)
+      // TODO: Pass these variabes as states (or something else, I don't really know JS...) include IP in those variables
+      // currently this only connects to 127.0.0.1 (i.e. localhost) 
+      navigate(`/document/` + port + '/' + idSelected + '/' + nameSelected);
+    })
   };
 
   // Get Document List from the server

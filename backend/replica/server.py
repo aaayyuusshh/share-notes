@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
-from typing import Annotated, List, Any
-from fastapi import Depends, Body, FastAPI, WebSocket, WebSocketDisconnect
+from typing import Annotated, List, Any, Tuple, Dict
+from fastapi import Depends, Body, FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import logging
@@ -20,19 +20,38 @@ from db import (
     create_repl_document
 )
 import websockets
+import requests
 
+# alternative to directly defining paramter type
+from pydantic import BaseModel
+
+class Server(BaseModel):
+    IP: str
+    port: str
 
 Session = Annotated[AsyncSession, Depends(session)]
+
+logger = logging.getLogger("uvicorn")
+
+server_list = []
+
+MY_PORT = os.getenv("PORT")
+logger.info(MY_PORT)
+
+MY_IP = os.getenv("IP")
+logger.info(MY_IP)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_all()
+    # inform master that you want to be registered to the cluster
+    # TODO: IP for server should be provided dynamically
+    reply = requests.post(f"http://localhost:8000/addServer/", params={"IP": MY_IP, "port": MY_PORT})
+    logger.info("Passed the post reqest")
+    logger.info(reply)
     yield
 
 app = FastAPI(lifespan=lifespan)
-MY_PORT = os.getenv('PORT')
-print(MY_PORT)
-
 
 origins = [
     "http://localhost:5173",
@@ -63,18 +82,15 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-logger = logging.getLogger("uvicorn")
-
 
 @app.post("/newDocID/{docName}")
 async def create_docID(s: Session, docName: str):
     docID = await create_document(s, docName)
-    # hard coded passing of the port number, should be done in master
-    return {"docID": docID, "port": 8001}
+    return {"docID": docID}
 
 
 @app.post("/createDoc/", response_model=Document)
-async def create_doc(docName: str, docContent: str, s: Session):
+async def create_doc(docID: int, docName: str, docContent: str, s: Session):
     doc = await create_document_with_content(s, docName, docContent)
     return doc
 
@@ -85,6 +101,15 @@ async def doc_list(s: Session) -> Any:
     docList = await s.execute(select(Document.id, Document.name))
     return docList
 
+
+# Updating server list to reflect any changes in the master
+# TODO: type should be List[Tuple[str, str]] to prevent the need for using split ... but causes errors for some reason
+@app.post("/updateServerList/")
+async def update_server_list(new_server_list: list[str]):
+    global server_list
+    server_list = new_server_list
+    logger.info(server_list)
+    return {"message": "Server list updated successfully"}
 
 
 @app.websocket("/ws/{document_id}/{docName}")
@@ -114,18 +139,19 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
             await manager.broadcast(doc.content)
 
-            for port in range(8001, 8006):
-                if port == MY_PORT:
+            for server in server_list:
+                # TODO: should also check for same IP
+                server = server.split(':')
+                if server[0] == MY_IP and server[1] == MY_PORT:
                     continue
-                response = await connect_to_replica(document_id, docName, doc.content, port)
-
-
+                response = await connect_to_replica(document_id, docName, doc.content, server[0], server[1])
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+
 # create websocket to connect to replica
-async def connect_to_replica(document_id: int, docName: str, content: str, port: int):
-    uri = f"ws://localhost:{port}/replica/ws/{document_id}/{docName}"
+async def connect_to_replica(document_id: int, docName: str, content: str, IP: str, port: str):
+    uri = f"ws://{IP}:{port}/replica/ws/{document_id}/{docName}"
     try:
         async with websockets.connect(uri) as websocket:
             print(f"Connected to replica {uri}")
@@ -140,7 +166,6 @@ async def connect_to_replica(document_id: int, docName: str, content: str, port:
     except Exception as e:
         print(f"An error occurred: {e}")
         raise
-
 
 
 @app.websocket("/replica/ws/{document_id}/{docName}")
