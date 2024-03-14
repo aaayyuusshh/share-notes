@@ -99,7 +99,7 @@ async def create_doc_and_conn(docName: str = Body()):
     
     # Getting replica with least amount of documents open
     head = heapq.heappop(pq)
-    d_pr_c[docID] = [head[2], 1] # third item in pq tuple is the IP:PORT and set number of readers to 1
+    d_pr_c[docID] = [head[2], 1, True, 0] # third item in pq tuple is the IP:PORT and set number of readers to 1
     heapq.heappush(pq, (head[0]+1, head[1], head[2]))
 
     server = d_pr_c[docID][0] # get the IP:PORT
