@@ -6,8 +6,9 @@ import './App.css';
 export default function Document() {
   const [textValue, setTextValue] = useState("");
   //const ws = useRef(null);
+  const MASTER_IP = "10.13.142.160"
 
-  const { port, id, docName } = useParams()
+  const { ip, port, id, docName } = useParams()
 
   const [webSocket, setWebSocket] = useState(null);
 
@@ -18,7 +19,7 @@ export default function Document() {
   }, []);
 
   const connectWebSocket = (port, id, docName) => {
-    const ws = new WebSocket('ws://localhost:' + port + '/ws/' + id + '/' + docName);
+    const ws = new WebSocket('ws://' + ip + ':' + port + '/ws/' + id + '/' + docName);
 
     ws.onopen = () => {
       console.log('WebSocket Connected');
@@ -38,7 +39,7 @@ export default function Document() {
 
   const requestNewIPAndPort = () => {
     try {
-      fetch('http://127.0.0.1:8000/lostConnection/', {
+      fetch('http://'+ MASTER_IP +':8000/lostConnection/', {
         method: "POST",
         header: {
           "Content-Type": "application/json",
