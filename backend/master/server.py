@@ -8,7 +8,6 @@ import logging
 from sqlmodel import Field, SQLModel
 from threading import Lock
 import json
-import heapq
 
 class ServerInfo:
     def __init__(self, IP_PORT: str, docsOpen: int) -> None:
@@ -152,18 +151,14 @@ async def transfer_conn(docID: str = Body()):
         server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
         open_docs[docID].IP_PORT = server_docs[index].IP_PORT
         open_docs[docID].conn_transfered += 1 # 1 more connection transfered
-
-        # if true everyone has been transfered over
-        if open_docs[docID].connections == open_docs[docID].conn_transfered:
-            open_docs[docID].not_transfering = True # set to true so disconnect on this IP:PORT can be responded to
-            open_docs[docID].conn_transfered = 0 # reset tracker for connections transfered
   
     else:
         open_docs[docID].conn_transfered += 1
-        # if true everyone has been transfered over
-        if open_docs[docID].connections == open_docs[docID].conn_transfered:
-            open_docs[docID].not_transfering = True
-            open_docs[docID].conn_transfered = 0 # reset tracker for connections transfered
+
+    # if true then everyone has been transfered over
+    if open_docs[docID].connections == open_docs[docID].conn_transfered:
+        open_docs[docID].not_transfering = True # set to true so disconnect on this IP:PORT can be responded to
+        open_docs[docID].conn_transfered = 0 # reset tracker for connections transfered
 
     server = open_docs[docID].IP_PORT # get the IP:PORT
     server = str(server).split(':')
