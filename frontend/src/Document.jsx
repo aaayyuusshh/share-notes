@@ -26,10 +26,14 @@ export default function Document() {
     };
     ws.onmessage = (event) => {
       console.log('Message from server ', event.data);
-
+      // split event.data into doc content and IP
+      const indexOfFirstColon = event.data.indexOf(':');
+      ip_received = event.data.substring(0, indexOfFirstColon);
       // check IP value sent to server
       // if IP is different change TextValue
-      setTextValue(event.data);
+      if (ip_received !== ip) {
+        setTextValue(event.data.substring(indexOfFirstColon + 1));
+      }
     };
 
     ws.onclose = () => {
@@ -104,7 +108,7 @@ export default function Document() {
 
     // Send textValue if the ws is open
     if (webSocket && webSocket.readyState === WebSocket.OPEN) {
-      webSocket.send(JSON.stringify({ content: value }));
+      webSocket.send(JSON.stringify({ content: value, ip: ip }));
     }
   }
 

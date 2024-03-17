@@ -138,13 +138,15 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
             # parse data json
             json_data = json.loads(data)
             data = json_data['content']
-            await manager.broadcast(data)
 
-            # ip_client = json_data['ip']
-            # logger.info("Content: ")
-            # logger.info(data)
-            # logger.info("IP: ")
-            # logger.info(ip_client)
+            ip_client = json_data['ip']
+            logger.info("Content: ")
+            logger.info(data)
+            logger.info("IP: ")
+            logger.info(ip_client)
+
+            await manager.broadcast(ip_client + ":" + data)
+
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
             # await manager.broadcast(doc.content)
 
