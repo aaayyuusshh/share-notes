@@ -26,6 +26,9 @@ export default function Document() {
     };
     ws.onmessage = (event) => {
       console.log('Message from server ', event.data);
+
+      // check IP value sent to server
+      // if IP is different change TextValue
       setTextValue(event.data);
     };
 

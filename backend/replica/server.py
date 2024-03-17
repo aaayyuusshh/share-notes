@@ -136,11 +136,17 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
         while True:
             data = await websocket.receive_text()
             # parse data json
-            data = json.loads(data)['content']
-            logger.info("Content: ")
-            logger.info(data)
+            json_data = json.loads(data)
+            data = json_data['content']
+            await manager.broadcast(data)
+
+            # ip_client = json_data['ip']
+            # logger.info("Content: ")
+            # logger.info(data)
+            # logger.info("IP: ")
+            # logger.info(ip_client)
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
-            await manager.broadcast(doc.content)
+            # await manager.broadcast(doc.content)
 
             for server in server_list:
                 # TODO: should also check for same IP
