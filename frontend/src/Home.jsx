@@ -66,7 +66,7 @@ const Home = () => {
       console.log(port)
       // TODO: Pass these variabes as states (or something else, I don't really know JS...) include IP in those variables
       // currently this only connects to 127.0.0.1 (i.e. localhost) 
-      navigate(`/document/` + port + '/' + idSelected + '/' + nameSelected);
+      navigate(`/document/` + IP + '/' + port + '/' + idSelected + '/' + nameSelected);
     })
   };
 
