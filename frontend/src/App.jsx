@@ -9,7 +9,7 @@ export default function App() {
       <div>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/document/:port/:id/:docName" element={<Document />} />
+          <Route path="/document/:ip/:port/:id/:docName" element={<Document />} />
         </Routes>
       </div>
     </Router>
