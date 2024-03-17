@@ -41,12 +41,15 @@ logger.info(MY_PORT)
 MY_IP = os.getenv("IP")
 logger.info(MY_IP)
 
+MASTER_IP = os.getenv("MASTER_IP")
+logger.info(MASTER_IP)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_all()
     # inform master that you want to be registered to the cluster
     # TODO: IP for server should be provided dynamically
-    reply = requests.post(f"http://localhost:8000/addServer/", params={"IP": MY_IP, "port": MY_PORT})
+    reply = requests.post(f"http://{MASTER_IP}:8000/addServer/", params={"IP": MY_IP, "port": MY_PORT})
     logger.info("Passed the post reqest")
     logger.info(reply)
     yield
