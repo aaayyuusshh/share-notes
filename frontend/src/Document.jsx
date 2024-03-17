@@ -28,7 +28,8 @@ export default function Document() {
       console.log('Message from server ', event.data);
       // split event.data into doc content and IP
       const indexOfFirstColon = event.data.indexOf(':');
-      ip_received = event.data.substring(0, indexOfFirstColon);
+      const ip_received = event.data.substring(0, indexOfFirstColon);
+      console.log(ip_received===ip);
       // check IP value sent to server
       // if IP is different change TextValue
       if (ip_received !== ip) {
