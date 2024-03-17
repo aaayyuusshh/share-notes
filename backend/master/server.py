@@ -10,21 +10,17 @@ from threading import Lock
 import json
 import heapq
 
-class DocumentBase(SQLModel):
-    name: str
-    content: str
+class ServerInfo:
+    def __init__(self, IP_PORT: str, docsOpen: int) -> None:
+        self.IP_PORT = IP_PORT
+        self.docsOpen = docsOpen
 
-class DocumentList(SQLModel):
-    id: int
-    name: str
-
-class Document(DocumentBase, table=True):
-    id: int = Field(primary_key=True)
-
-class DocumentUpdate(DocumentBase):
-    id: int
-    content: Optional[str]
-
+class OpenDocInfo:
+    def __init__(self, IP_PORT: str, conn: int, t_status: bool, con_t: int) -> None:
+        self.IP_PORT = IP_PORT
+        self.connections = conn
+        self.not_transfering = t_status
+        self.conn_transfered = con_t
 
 # Create an instance of the FastAPI class
 app = FastAPI(title="Master Server")
@@ -45,31 +41,30 @@ app.add_middleware(
 logger = logging.getLogger("uvicorn")
 
 # Tracking servers in the cluster
-server_list = []
+server_docs: list[ServerInfo] = []
 lock = Lock() # NOTE: Lock is from threading, might have to use multiprocesser lock if uvicorn launches multiple processes (I don't think it does)
 
 # Tracking doc-primary_replica-clients coupling
-d_pr_c = {}
-pq = []
-# dead_servers = set()
+open_docs: dict[int, OpenDocInfo] = {}
 
 # TODO: a return to home screen and save button which will inform the server when a clinet disconnected 
 # NOTE: This can be done in the disconnect exception handling in the actual replica
 
+
+### End points to deal with server requests and updates ###
+
 @app.post("/addServer/")
 async def con_server(IP: str, port: str, background_task: BackgroundTasks):
     with lock:
-        server_list.append(f"{IP}:{port}")
-        # add to pq with 0 running documents being managed
-        heapq.heappush(pq, (0, len(pq), f"{IP}:{port}"))
-        logger.info(server_list)
+        # Track number of open docs on the server
+        server_docs.append(ServerInfo(f"{IP}:{port}", 0))
+        logger.info(server_docs)
         # inform other servers that a new one joined
-        background_task.add_task(broadcast_servers, server_list)
-        #broadcast_servers(server_list)
+        background_task.add_task(broadcast_servers, server_docs)
     return {"message": "Server added to cluster"}
 
-
-def broadcast_servers(server_list: dict):
+def broadcast_servers(server_docs: list[ServerInfo]):
+    server_list = [x.IP_PORT for x in server_docs] # get the IP_PORT info from the objects
     with lock:
         for server in server_list:
             try:
@@ -78,14 +73,28 @@ def broadcast_servers(server_list: dict):
             except Exception as e:
                 print(f"Failed to broadcast server list to server at IP {server}: {e}")
 
+@app.get("/lostClient/")
+async def lost_client(docID: int):
+    open_docs[docID].connections -= 1 # decreament client number
+    if open_docs[docID][1] == 0: 
+        # if no more client ... remove this docID from being active
+        try: 
+            index = [ x.IP_PORT for x in server_docs ].index(open_docs[docID].IP_PORT)
+            server_docs[index] -= 1 # this replica is tracking one less document (increasing it priority to take on more docs in the future)
+            return {"message": "Client lose acknowledged"}
+        except ValueError:
+            return {"Error": "Could not find the replica server the document was on"} # should never run
 
+
+### End points to deal with client request ###
+                
 @app.post("/createDocAndConnect/")
 async def create_doc_and_conn(docName: str = Body()):
     docID = -1
     with lock:
-        for server in server_list:
+        for server in server_docs:
             try:
-                server = str(server).split(':')
+                server = server.IP_PORT.split(':')
                 # This should ideally be passed as 'data=' parameter in the post request, but it causes issues with the naming
                 ret_obj = requests.post(f"http://{server[0]}:{server[1]}/newDocID/{docName}/")
                 logger.info(ret_obj.json())
@@ -96,35 +105,32 @@ async def create_doc_and_conn(docName: str = Body()):
     if (docID == -1):
         logger.info("Error occured with creating document")
     
-    # Getting replica with least amount of documents open
-    head = heapq.heappop(pq)
-    d_pr_c[docID] = [head[2], 1, True, 0] # third item in pq tuple is the IP:PORT and set number of readers to 1
-    heapq.heappush(pq, (head[0]+1, head[1], head[2]))
+    # Getting replica with least amount of documents open (NOTE: This can be done as a complex pq with update functionality, but seems pointless for list of 4 replicas)
+    index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
+    server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
+    open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1, True, 0) # Track this document as in use and number of clients as 1
 
-    server = d_pr_c[docID][0] # get the IP:PORT
+    server = open_docs[docID][0] # get the IP:PORT
     server = str(server).split(':')
 
     return {"docID": docID, "docName": docName, "IP": server[0], "port": server[1]}
-
 
 @app.post("/connectToExistingDoc/")
 async def conn_to_existing_doc(docID: str = Body()):
     docID = int(docID)
 
-    if docID in d_pr_c:
-        d_pr_c[docID][1] += 1 # increment number of connections for that document by 1
+    if docID in open_docs:
+        open_docs[docID].connections += 1 # Increment number of clients for that document by 1
     else:
-        head = heapq.heappop(pq) # Get replica server with the least amount of documents open
-        while head[2] not in server_list: # remove dead servers from pq (not ideal but you cant search a heap)
-            head = heapq.heappop(pq)
-        d_pr_c[docID] = [head[2], 1, True, 0] # third item in pq tuple is the IP:PORT and set number of readers to 1
-        heapq.heappush(pq, (head[0]+1, head[1], head[2]))
+        # Get replica server with the least amount of documents open
+        index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
+        server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
+        open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1, True, 0) # Track this document as in use and number of clients as 1
 
-    server = d_pr_c[docID][0] # get the IP:PORT
+    server = open_docs[docID][0] # get the IP:PORT
     server = str(server).split(':')
 
     return {"IP": server[0], "port": server[1]}
-
 
 @app.post("/lostConnection/")
 async def transfer_conn(docID: str = Body()):
@@ -134,38 +140,32 @@ async def transfer_conn(docID: str = Body()):
     logger.info(docID)
 
     # if the information currently says true, this is the first client to come with a disconnect request
-    if d_pr_c[docID][2]:
+    if open_docs[docID].not_transfering:
         logger.info("Value added to set:")
-        logger.info(d_pr_c[docID][0])
-        server_list.remove(d_pr_c[docID][0]) # remove the server from the active lit of servers
-        #dead_servers.add(d_pr_c[docID][0]) # add the server to the list of dead server
+        logger.info(open_docs[docID].IP_PORT)
+        server_docs.remove(open_docs[docID].IP_PORT) # remove the server from the active list of servers
 
-        head = heapq.heappop(pq) # Get replica server with the least amount of documents open
-        logger.info("Head before loop:")
-        logger.info(head)
-        while head[2] not in server_list: # remove dead servers from pq (not ideal but you cant search a heap)
-            head = heapq.heappop(pq)
-            if not pq:
-                return {"Error": "no servers online to connect too"}
-        logger.info("Head after loop:")
-        logger.info(head)
-        d_pr_c[docID][0] = head[2]
-        d_pr_c[docID][3] += 1
-        heapq.heappush(pq, (head[0]+1, head[1], head[2]))
+        if not server_docs:
+            return {"Error": "no servers online to connect too"}
+        # Get replica server with the least amount of documents open
+        index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
+        server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
+        open_docs[docID].IP_PORT = server_docs[index].IP_PORT
+        open_docs[docID].conn_transfered += 1 # 1 more connection transfered
 
         # if true everyone has been transfered over
-        if d_pr_c[docID][1] == d_pr_c[docID][3]:
-            d_pr_c[docID][2] = True # set to true so disconnect on this IP:PORT can be responded to
-            d_pr_c[docID][3] = 0 # reset tracker for connections transfered
+        if open_docs[docID].connections == open_docs[docID].conn_transfered:
+            open_docs[docID].not_transfering = True # set to true so disconnect on this IP:PORT can be responded to
+            open_docs[docID].conn_transfered = 0 # reset tracker for connections transfered
   
     else:
-        d_pr_c[docID][3] += 1
+        open_docs[docID].conn_transfered += 1
         # if true everyone has been transfered over
-        if d_pr_c[docID][1] == d_pr_c[docID][3]:
-            d_pr_c[docID][2] = True
-            d_pr_c[docID][3] = 0 # reset tracker for connections transfered
+        if open_docs[docID].connections == open_docs[docID].conn_transfered:
+            open_docs[docID].not_transfering = True
+            open_docs[docID].conn_transfered = 0 # reset tracker for connections transfered
 
-    server = d_pr_c[docID][0] # get the IP:PORT
+    server = open_docs[docID].IP_PORT # get the IP:PORT
     server = str(server).split(':')
     logger.info("server:")
     logger.info(server)
@@ -173,9 +173,10 @@ async def transfer_conn(docID: str = Body()):
     return {"IP": server[0], "port": server[1]}
 
 
+# TODO: Make this async if needed, was causing issues previously
 @app.get("/docList/")
 def doc_list() -> Any:
     # defaulting to getting list from the first server
-    ret_obj = requests.get(f'http://{str(server_list[0]).split(':')[0]}:{str(server_list[0]).split(':')[1]}/docList/')
+    ret_obj = requests.get(f'http://{server_docs[0].IP_PORT.split(':')[0]}:{server_docs[0].IP_PORT.split(':')[1]}/docList/')
     logger.info(ret_obj.json())
     return ret_obj.json()

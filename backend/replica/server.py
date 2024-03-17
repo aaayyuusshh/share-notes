@@ -146,6 +146,10 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
                     continue
                 response = await connect_to_replica(document_id, docName, doc.content, server[0], server[1])
     except WebSocketDisconnect:
+        # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
+        response = await requests.post(f"http://localhost:8000/lostClient/", params={"docID": document_id})
+        logger.info(response)
+        # Then disconnect
         manager.disconnect(websocket)
 
 
