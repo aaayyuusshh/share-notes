@@ -136,11 +136,12 @@ async def conn_to_existing_doc(docID: str = Body()):
     return {"IP": server[0], "port": server[1]}
 
 @app.post("/lostConnection/")
-async def transfer_conn(body: LostConnection):
+async def transfer_conn(data_str: str = Body()):
+    data = json.loads(data_str)
 
-    ip = body.IP
-    port = body.PORT
-    docID = body.docID
+    ip = data['IP']
+    port = data['PORT']
+    docID = data['docID']
 
     logger.info("IP:")
     logger.info(ip)

@@ -62,7 +62,7 @@ export default function Document() {
         body: JSON.stringify({
           IP: ip,
           PORT: port,
-          docID: id
+          docID: id,
         })
       })
       .then((response) => response.json())
