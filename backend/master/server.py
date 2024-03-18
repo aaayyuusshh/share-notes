@@ -83,7 +83,7 @@ async def lost_client(docID: int):
         try: 
             index = [ x.IP_PORT for x in server_docs ].index(open_docs[docID].IP_PORT)
             server_docs[index].docsOpen -= 1 # this replica is tracking one less document (increasing it priority to take on more docs in the future)
-            # open_docs.pop(docID, None) # Removes the key on server shutdown
+            # open_docs.pop(docID, None) # ISSUE: Removes the key on server shutdown
             return {"Message": "Client lose acknowledged"}
         except ValueError:
             return {"Error": "Could not find the replica server the document was on"} # should never run
@@ -108,7 +108,6 @@ async def create_doc_and_conn(docName: str = Body()):
     if (docID == -1):
         logger.info("Error occured with creating document")
     
-    # Getting replica with least amount of documents open (NOTE: This can be done as a pq with update functionality, but seems pointless for list of 4 replicas)
     index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
     server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
     open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1) # Track this document as in use and number of clients as 1
@@ -139,11 +138,12 @@ async def conn_to_existing_doc(docID: str = Body()):
 async def transfer_conn(data_str: str = Body()):
     data = json.loads(data_str)
 
+    # Client provide the document they were working with and the IP and PORT they got no response from
+    # TODO: This way of doing things puts full trust in the client, ideally the master would verify if the
+    # server is actually dead by asking for a heartbeat 
     ip = data['IP']
     port = data['PORT']
-
     docID = int(data['docID'])
-
 
     logger.info("IP:")
     logger.info(ip)
@@ -153,26 +153,21 @@ async def transfer_conn(data_str: str = Body()):
     logger.info(docID)
 
     server_list = [x.IP_PORT for x in server_docs]
-
     logger.info(server_list)
 
     client_IP_PORT = ip + ':' + port
 
-    # TODO: This way of doing things puts full trust in the client, ideally the master would verify if the
-    # server is actually head by asking for a heartbeat 
     # The first request to transfer will have the same IP_PORT
     if (docID not in open_docs) or (open_docs[docID].IP_PORT == client_IP_PORT):
         for server_doc in server_docs:
-            if server_doc.IP_PORT == open_docs[docID].IP_PORT:
+            if server_doc.IP_PORT == client_IP_PORT:
                 server_docs.remove(server_doc) # remove the server from the active list of servers
-        # server_docs.remove(open_docs[docID].IP_PORT) # remove the server from the active list of servers
         if not server_docs:
             return {"Error": "no servers online to connect too"}
         # Get replica server with the least amount of documents open
         index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
         server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
-        open_docs[docID].IP_PORT = server_docs[index].IP_PORT # new IP:PORT where the client will go to
-        open_docs[docID].connections = 1 # 1 connection on the new port
+        open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1) # new IP:PORT where the client will go to with 1 reader
     
     else:
         open_docs[docID].connections += 1 # 1 more connection on the new port
