@@ -14,7 +14,7 @@ export default function Document() {
 
 
   useEffect(() => {
-    connectWebSocket(port, id, docName);
+    connectWebSocket(ip, port, id, docName);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -39,20 +39,24 @@ export default function Document() {
 
     ws.onclose = () => {
       console.log('WebSocket disconnected');
-      requestNewIPAndPort();
+      requestNewIPAndPort(ip, port, id);
     };
 
     setWebSocket(ws);
   };
 
-  const requestNewIPAndPort = () => {
+  const requestNewIPAndPort = (ip, port, id) => {
     try {
       fetch('http://'+ MASTER_IP +':8000/lostConnection/', {
         method: "POST",
         header: {
           "Content-Type": "application/json",
         },
-        body: id,
+        body: JSON.stringify({
+          IP: ip,
+          PORT: port,
+          docID: id
+        })
       })
       .then((response) => response.json())
       .then((data) => {
