@@ -19,3 +19,19 @@ npm install
 npm run dev
 ```
 These commands install the necessary dependencies and start the development server for the frontend.
+
+
+For fault tolerance demo:
+
+Start master using:
+
+./run_local.sh 8000
+
+Start replicas using:
+
+./start_replica_local.sh 8002
+./start_replica_local.sh 8003
+
+Start frontend using:
+
+npm run dev
