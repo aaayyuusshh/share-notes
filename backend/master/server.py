@@ -15,11 +15,11 @@ class ServerInfo:
         self.docsOpen = docsOpen
 
 class OpenDocInfo:
-    def __init__(self, IP_PORT: str, conn: int, t_status: bool, con_t: int) -> None:
+    def __init__(self, IP_PORT: str, conn: int) -> None:
         self.IP_PORT = IP_PORT
         self.connections = conn
-        self.not_transfering = t_status
-        self.conn_transfered = con_t
+        #self.not_transfering = t_status
+        #self.conn_transfered = con_t
 
 # Create an instance of the FastAPI class
 app = FastAPI(title="Master Server")
@@ -75,12 +75,12 @@ def broadcast_servers(server_docs: list[ServerInfo]):
 @app.get("/lostClient/")
 async def lost_client(docID: int):
     open_docs[docID].connections -= 1 # decreament client number
-    if open_docs[docID][1] == 0: 
+    if open_docs[docID].connections == 0: 
         # if no more client ... remove this docID from being active
         try: 
             index = [ x.IP_PORT for x in server_docs ].index(open_docs[docID].IP_PORT)
             server_docs[index] -= 1 # this replica is tracking one less document (increasing it priority to take on more docs in the future)
-            return {"message": "Client lose acknowledged"}
+            return {"Message": "Client lose acknowledged"}
         except ValueError:
             return {"Error": "Could not find the replica server the document was on"} # should never run
 
@@ -104,12 +104,12 @@ async def create_doc_and_conn(docName: str = Body()):
     if (docID == -1):
         logger.info("Error occured with creating document")
     
-    # Getting replica with least amount of documents open (NOTE: This can be done as a complex pq with update functionality, but seems pointless for list of 4 replicas)
+    # Getting replica with least amount of documents open (NOTE: This can be done as a pq with update functionality, but seems pointless for list of 4 replicas)
     index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
     server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
-    open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1, True, 0) # Track this document as in use and number of clients as 1
+    open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1) # Track this document as in use and number of clients as 1
 
-    server = open_docs[docID][0] # get the IP:PORT
+    server = open_docs[docID].IP_PORT # get the IP:PORT
     server = str(server).split(':')
 
     return {"docID": docID, "docName": docName, "IP": server[0], "port": server[1]}
@@ -124,9 +124,9 @@ async def conn_to_existing_doc(docID: str = Body()):
         # Get replica server with the least amount of documents open
         index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
         server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
-        open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1, True, 0) # Track this document as in use and number of clients as 1
+        open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1) # Track this document as in use and number of clients as 1
 
-    server = open_docs[docID][0] # get the IP:PORT
+    server = open_docs[docID].IP_PORT # get the IP:PORT
     server = str(server).split(':')
 
     return {"IP": server[0], "port": server[1]}
@@ -138,10 +138,15 @@ async def transfer_conn(docID: str = Body()):
     logger.info("docID:")
     logger.info(docID)
 
-    # if the information currently says true, this is the first client to come with a disconnect request
-    if open_docs[docID].not_transfering:
-        logger.info("Value added to set:")
+    # if the server the docIP is pointing to is running (in server_IP_PORTS) return that to the client
+    server_IP_PORTS = [ x.IP_PORT for x in server_docs ]
+    if open_docs[docID].IP_PORT in server_IP_PORTS:
+        logger.info("The document already on a active connection at IP_PORT:")
         logger.info(open_docs[docID].IP_PORT)
+        open_docs[docID].connections += 1
+    
+    else:
+
         server_docs.remove(open_docs[docID].IP_PORT) # remove the server from the active list of servers
 
         if not server_docs:
@@ -151,9 +156,6 @@ async def transfer_conn(docID: str = Body()):
         server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
         open_docs[docID].IP_PORT = server_docs[index].IP_PORT
         open_docs[docID].conn_transfered += 1 # 1 more connection transfered
-  
-    else:
-        open_docs[docID].conn_transfered += 1
 
     # if true then everyone has been transfered over
     if open_docs[docID].connections == open_docs[docID].conn_transfered:
