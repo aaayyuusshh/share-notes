@@ -5,9 +5,9 @@ from typing import Optional, Annotated, List, Any
 import requests
 #import aiohttp  NOTE: The 'requests' module is not asyncronous, this one is ... I am not sure if being sychornous will issues
 import logging
-from sqlmodel import Field, SQLModel
 from threading import Lock
 import json
+from pydantic import BaseModel
 
 class ServerInfo:
     def __init__(self, IP_PORT: str, docsOpen: int) -> None:
@@ -18,6 +18,11 @@ class OpenDocInfo:
     def __init__(self, IP_PORT: str, conn: int) -> None:
         self.IP_PORT = IP_PORT
         self.connections = conn
+
+class LostConnection(BaseModel):
+    IP: str
+    PORT: str
+    docID: int
 
 # Create an instance of the FastAPI class
 app = FastAPI(title="Master Server")
@@ -55,7 +60,7 @@ async def con_server(IP: str, port: str, background_task: BackgroundTasks):
     with lock:
         # Track number of open docs on the server
         server_docs.append(ServerInfo(f"{IP}:{port}", 0))
-        logger.info(server_docs)
+        logger.info([x.IP_PORT for x in server_docs])
         # inform other servers that a new one joined
         background_task.add_task(broadcast_servers, server_docs)
     return {"message": "Server added to cluster"}
@@ -70,15 +75,15 @@ def broadcast_servers(server_docs: list[ServerInfo]):
             except Exception as e:
                 print(f"Failed to broadcast server list to server at IP {server}: {e}")
 
-@app.get("/lostClient/")
+@app.post("/lostClient/")
 async def lost_client(docID: int):
     open_docs[docID].connections -= 1 # decreament client number
     # if no more client ... remove this docID from being active
     if open_docs[docID].connections == 0: 
         try: 
             index = [ x.IP_PORT for x in server_docs ].index(open_docs[docID].IP_PORT)
-            server_docs[index] -= 1 # this replica is tracking one less document (increasing it priority to take on more docs in the future)
-            open_docs.pop(docID, None)
+            server_docs[index].docsOpen -= 1 # this replica is tracking one less document (increasing it priority to take on more docs in the future)
+            # open_docs.pop(docID, None) # Removes the key on server shutdown
             return {"Message": "Client lose acknowledged"}
         except ValueError:
             return {"Error": "Could not find the replica server the document was on"} # should never run
@@ -131,22 +136,29 @@ async def conn_to_existing_doc(docID: str = Body()):
     return {"IP": server[0], "port": server[1]}
 
 @app.post("/lostConnection/")
-async def transfer_conn(IP: str = Body(), PORT: str = Body(), docID: str = Body()):
-    docID = int(docID)
+async def transfer_conn(body: LostConnection):
+
+    ip = body.IP
+    port = body.PORT
+    docID = body.docID
 
     logger.info("IP:")
-    logger.info(IP)
+    logger.info(ip)
     logger.info("PORT:")
-    logger.info(PORT)
+    logger.info(port)
     logger.info("docID:")
     logger.info(docID)
 
-    client_IP_PORT = IP + ':' + PORT
+    server_list = [x.IP_PORT for x in server_docs]
+
+    logger.info(server_list)
+
+    client_IP_PORT = ip + ':' + port
 
     # TODO: This way of doing things puts full trust in the client, ideally the master would verify if the
     # server is actually head by asking for a heartbeat 
     # The first request to transfer will have the same IP_PORT
-    if open_docs[docID].IP_PORT == client_IP_PORT:
+    if (docID not in open_docs) or (open_docs[docID].IP_PORT == client_IP_PORT):
         server_docs.remove(open_docs[docID].IP_PORT) # remove the server from the active list of servers
         if not server_docs:
             return {"Error": "no servers online to connect too"}
@@ -170,6 +182,7 @@ async def transfer_conn(IP: str = Body(), PORT: str = Body(), docID: str = Body(
 # TODO: Make this async if needed, was causing issues previously
 @app.get("/docList/")
 def doc_list() -> Any:
+    logger.info(server_docs)
     # defaulting to getting list from the first server
     ret_obj = requests.get(f'http://{server_docs[0].IP_PORT.split(':')[0]}:{server_docs[0].IP_PORT.split(':')[1]}/docList/')
     logger.info(ret_obj.json())

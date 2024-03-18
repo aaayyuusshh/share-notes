@@ -6,7 +6,7 @@ import './App.css';
 export default function Document() {
   const [textValue, setTextValue] = useState("");
   //const ws = useRef(null);
-  const MASTER_IP = "10.13.107.46"
+  const MASTER_IP = "localhost"
 
   const { ip, port, id, docName } = useParams()
 
@@ -46,10 +46,17 @@ export default function Document() {
   };
 
   const requestNewIPAndPort = (ip, port) => {
+    const bodyObj = JSON.stringify({
+      IP: ip,
+      PORT: port,
+      docID: id
+    })
+    console.log(bodyObj)
     try {
       fetch('http://'+ MASTER_IP +':8000/lostConnection/', {
         method: "POST",
         header: {
+          'Accept': 'application/json',
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
