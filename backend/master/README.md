@@ -5,3 +5,4 @@ pip install -r requirements.txt
 uvicorn server:app --reload --port 8000
 
 # go to the <url>/docs
+Run server on 0.0.0.0 and record MASTER_IP connection.

@@ -6,6 +6,7 @@ import './App.css';
 export default function Document() {
   const [textValue, setTextValue] = useState("");
   //const ws = useRef(null);
+  const MASTER_IP = "10.13.142.160"
 
   const { ip, port, id, docName } = useParams()
 
@@ -17,15 +18,23 @@ export default function Document() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const connectWebSocket = (ip, port, id, docName) => {
-    const ws = new WebSocket('ws://localhost:' + port + '/ws/' + id + '/' + docName);
+  const connectWebSocket = (port, id, docName) => {
+    const ws = new WebSocket('ws://' + ip + ':' + port + '/ws/' + id + '/' + docName);
 
     ws.onopen = () => {
       console.log('WebSocket Connected');
     };
     ws.onmessage = (event) => {
       console.log('Message from server ', event.data);
-      setTextValue(event.data);
+      // split event.data into doc content and IP
+      const indexOfFirstColon = event.data.indexOf(':');
+      const ip_received = event.data.substring(0, indexOfFirstColon);
+      console.log(ip_received===ip);
+      // check IP value sent to server
+      // if IP is different change TextValue
+      if (ip_received !== ip) {
+        setTextValue(event.data.substring(indexOfFirstColon + 1));
+      }
     };
 
     ws.onclose = () => {
@@ -38,7 +47,7 @@ export default function Document() {
 
   const requestNewIPAndPort = (ip, port, id) => {
     try {
-      fetch('http://127.0.0.1:8000/lostConnection/', {
+      fetch('http://'+ MASTER_IP +':8000/lostConnection/', {
         method: "POST",
         header: {
           "Content-Type": "application/json",
@@ -104,7 +113,7 @@ export default function Document() {
 
     // Send textValue if the ws is open
     if (webSocket && webSocket.readyState === WebSocket.OPEN) {
-      webSocket.send(JSON.stringify({ content: value }));
+      webSocket.send(JSON.stringify({ content: value, ip: ip }));
     }
   }
 

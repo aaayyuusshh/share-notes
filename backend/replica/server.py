@@ -41,12 +41,15 @@ logger.info(MY_PORT)
 MY_IP = os.getenv("IP")
 logger.info(MY_IP)
 
+MASTER_IP = os.getenv("MASTER_IP")
+logger.info(MASTER_IP)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_all()
     # inform master that you want to be registered to the cluster
     # TODO: IP for server should be provided dynamically
-    reply = requests.post(f"http://localhost:8000/addServer/", params={"IP": MY_IP, "port": MY_PORT})
+    reply = requests.post(f"http://{MASTER_IP}:8000/addServer/", params={"IP": MY_IP, "port": MY_PORT})
     logger.info("Passed the post reqest")
     logger.info(reply)
     yield
@@ -133,11 +136,19 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
         while True:
             data = await websocket.receive_text()
             # parse data json
-            data = json.loads(data)['content']
+            json_data = json.loads(data)
+            data = json_data['content']
+
+            ip_client = json_data['ip']
             logger.info("Content: ")
             logger.info(data)
+            logger.info("IP: ")
+            logger.info(ip_client)
+
+            await manager.broadcast(ip_client + ":" + data)
+
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
-            await manager.broadcast(doc.content)
+            # await manager.broadcast(doc.content)
 
             for server in server_list:
                 # TODO: should also check for same IP

@@ -8,6 +8,8 @@ const Home = () => {
   const [nameSelected, setNameSelected] = useState("");
   const [searchTerm, setSearchTerm] = useState('');
 
+  const MASTER_IP = "10.13.142.160"
+
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
@@ -41,7 +43,7 @@ const Home = () => {
       console.log(port)
       // TODO: Pass these variabes as states (or something else, I don't really know JS...) include IP in those variables
       // currently this only connects to 127.0.0.1 (i.e. localhost) 
-      navigate(`/document/` + port + '/' + docID + '/' + docName);
+      navigate(`/document/` + IP + '/' + port + '/' + docID + '/' + docName);
     })
     //return // Commented out
   };
@@ -49,7 +51,7 @@ const Home = () => {
   const navigateToExistingDocument = () => {
     console.log(idSelected)
     console.log(nameSelected)
-    fetch('http://127.0.0.1:8000/connectToExistingDoc/', {
+    fetch('http://'+ MASTER_IP +':8000/connectToExistingDoc/', {
       method: "POST",
       header: {
         "Content-Type": "application/json",
@@ -64,13 +66,13 @@ const Home = () => {
       console.log(port)
       // TODO: Pass these variabes as states (or something else, I don't really know JS...) include IP in those variables
       // currently this only connects to 127.0.0.1 (i.e. localhost) 
-      navigate(`/document/` + port + '/' + idSelected + '/' + nameSelected);
+      navigate(`/document/` + IP + '/' + port + '/' + idSelected + '/' + nameSelected);
     })
   };
 
   // Get Document List from the server
   const getDocList = async () => {
-    const response = await fetch('http://127.0.0.1:8000/docList/')
+    const response = await fetch('http://'+ MASTER_IP +':8000/docList/')
     setDocList(Object.entries(await response.json()))
     console.log(response)
   }
