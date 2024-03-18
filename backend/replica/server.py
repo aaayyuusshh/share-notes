@@ -149,15 +149,15 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
             # await manager.broadcast(doc.content)
 
-            for server in server_list:
+            for server_info in server_list:
                 # TODO: should also check for same IP
-                server = server.split(':')
+                server = server_info.split(':')
                 if server[0] == MY_IP and server[1] == MY_PORT:
                     continue
                 try:
                     response = await connect_to_replica(document_id, docName, doc.content, server[0], server[1])
                 except TimeoutError:
-                    server_list.remove(server)
+                    server_list.remove(server_info)
                     continue
     except WebSocketDisconnect:
         # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
