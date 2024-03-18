@@ -8,7 +8,7 @@ const Home = () => {
   const [nameSelected, setNameSelected] = useState("");
   const [searchTerm, setSearchTerm] = useState('');
 
-  const MASTER_IP = "10.13.142.160"
+  const MASTER_IP = "10.13.107.46"
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -24,7 +24,7 @@ const Home = () => {
 
   const navigateToNewDocument = () => {
     console.log(docName)
-    fetch('http://127.0.0.1:8000/createDocAndConnect/', {
+    fetch('http://' + MASTER_IP + ':8000/createDocAndConnect/', {
       method: "POST",
       header: {
         "Content-Type": "application/json",
@@ -51,7 +51,7 @@ const Home = () => {
   const navigateToExistingDocument = () => {
     console.log(idSelected)
     console.log(nameSelected)
-    fetch('http://'+ MASTER_IP +':8000/connectToExistingDoc/', {
+    fetch('http://' + MASTER_IP + ':8000/connectToExistingDoc/', {
       method: "POST",
       header: {
         "Content-Type": "application/json",

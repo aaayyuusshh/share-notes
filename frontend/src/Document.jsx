@@ -6,7 +6,7 @@ import './App.css';
 export default function Document() {
   const [textValue, setTextValue] = useState("");
   //const ws = useRef(null);
-  const MASTER_IP = "10.13.142.160"
+  const MASTER_IP = "10.13.107.46"
 
   const { ip, port, id, docName } = useParams()
 
@@ -14,11 +14,11 @@ export default function Document() {
 
 
   useEffect(() => {
-    connectWebSocket(ip, port, id, docName);
+    connectWebSocket(ip, port);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const connectWebSocket = (port, id, docName) => {
+  const connectWebSocket = (ip, port) => {
     const ws = new WebSocket('ws://' + ip + ':' + port + '/ws/' + id + '/' + docName);
 
     ws.onopen = () => {
@@ -39,13 +39,13 @@ export default function Document() {
 
     ws.onclose = () => {
       console.log('WebSocket disconnected');
-      requestNewIPAndPort(ip, port, id);
+      requestNewIPAndPort(ip, port);
     };
 
     setWebSocket(ws);
   };
 
-  const requestNewIPAndPort = (ip, port, id) => {
+  const requestNewIPAndPort = (ip, port) => {
     try {
       fetch('http://'+ MASTER_IP +':8000/lostConnection/', {
         method: "POST",
@@ -61,11 +61,11 @@ export default function Document() {
       .then((response) => response.json())
       .then((data) => {
       const IP = data.IP.toString()
-      const port = data.port.toString()
+      const PORT = data.port.toString()
       console.log(IP)
       console.log(port)
       if (IP && port) {
-        reconnectWebSocket(IP, port);
+        reconnectWebSocket(IP, PORT);
       } else {
         console.error('Failed to get new IP and port');
       }
@@ -75,13 +75,13 @@ export default function Document() {
     }
   };
 
-  const reconnectWebSocket = (IP, port) => {
+  const reconnectWebSocket = (IP, PORT) => {
     // Close the previous WebSocket connection
     if (webSocket) {
       webSocket.close();
     }
     // Establish a new WebSocket connection with the new IP and port
-    connectWebSocket(port, id, docName);
+    connectWebSocket(IP, PORT);
   };
 
   
