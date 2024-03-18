@@ -141,7 +141,9 @@ async def transfer_conn(data_str: str = Body()):
 
     ip = data['IP']
     port = data['PORT']
-    docID = data['docID']
+
+    docID = int(data['docID'])
+
 
     logger.info("IP:")
     logger.info(ip)
@@ -160,7 +162,10 @@ async def transfer_conn(data_str: str = Body()):
     # server is actually head by asking for a heartbeat 
     # The first request to transfer will have the same IP_PORT
     if (docID not in open_docs) or (open_docs[docID].IP_PORT == client_IP_PORT):
-        server_docs.remove(open_docs[docID].IP_PORT) # remove the server from the active list of servers
+        for server_doc in server_docs:
+            if server_doc.IP_PORT == open_docs[docID].IP_PORT:
+                server_docs.remove(server_doc) # remove the server from the active list of servers
+        # server_docs.remove(open_docs[docID].IP_PORT) # remove the server from the active list of servers
         if not server_docs:
             return {"Error": "no servers online to connect too"}
         # Get replica server with the least amount of documents open
