@@ -18,8 +18,6 @@ class OpenDocInfo:
     def __init__(self, IP_PORT: str, conn: int) -> None:
         self.IP_PORT = IP_PORT
         self.connections = conn
-        #self.not_transfering = t_status
-        #self.conn_transfered = con_t
 
 # Create an instance of the FastAPI class
 app = FastAPI(title="Master Server")
@@ -75,11 +73,12 @@ def broadcast_servers(server_docs: list[ServerInfo]):
 @app.get("/lostClient/")
 async def lost_client(docID: int):
     open_docs[docID].connections -= 1 # decreament client number
+    # if no more client ... remove this docID from being active
     if open_docs[docID].connections == 0: 
-        # if no more client ... remove this docID from being active
         try: 
             index = [ x.IP_PORT for x in server_docs ].index(open_docs[docID].IP_PORT)
             server_docs[index] -= 1 # this replica is tracking one less document (increasing it priority to take on more docs in the future)
+            open_docs.pop(docID, None)
             return {"Message": "Client lose acknowledged"}
         except ValueError:
             return {"Error": "Could not find the replica server the document was on"} # should never run
@@ -132,35 +131,33 @@ async def conn_to_existing_doc(docID: str = Body()):
     return {"IP": server[0], "port": server[1]}
 
 @app.post("/lostConnection/")
-async def transfer_conn(docID: str = Body()):
+async def transfer_conn(IP: str = Body(), PORT: str = Body(), docID: str = Body()):
     docID = int(docID)
 
+    logger.info("IP:")
+    logger.info(IP)
+    logger.info("PORT:")
+    logger.info(PORT)
     logger.info("docID:")
     logger.info(docID)
 
-    # if the server the docIP is pointing to is running (in server_IP_PORTS) return that to the client
-    server_IP_PORTS = [ x.IP_PORT for x in server_docs ]
-    if open_docs[docID].IP_PORT in server_IP_PORTS:
-        logger.info("The document already on a active connection at IP_PORT:")
-        logger.info(open_docs[docID].IP_PORT)
-        open_docs[docID].connections += 1
-    
-    else:
+    client_IP_PORT = IP + ':' + PORT
 
+    # TODO: This way of doing things puts full trust in the client, ideally the master would verify if the
+    # server is actually head by asking for a heartbeat 
+    # The first request to transfer will have the same IP_PORT
+    if open_docs[docID].IP_PORT == client_IP_PORT:
         server_docs.remove(open_docs[docID].IP_PORT) # remove the server from the active list of servers
-
         if not server_docs:
             return {"Error": "no servers online to connect too"}
         # Get replica server with the least amount of documents open
         index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
         server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
-        open_docs[docID].IP_PORT = server_docs[index].IP_PORT
-        open_docs[docID].conn_transfered += 1 # 1 more connection transfered
-
-    # if true then everyone has been transfered over
-    if open_docs[docID].connections == open_docs[docID].conn_transfered:
-        open_docs[docID].not_transfering = True # set to true so disconnect on this IP:PORT can be responded to
-        open_docs[docID].conn_transfered = 0 # reset tracker for connections transfered
+        open_docs[docID].IP_PORT = server_docs[index].IP_PORT # new IP:PORT where the client will go to
+        open_docs[docID].connections = 1 # 1 connection on the new port
+    
+    else:
+        open_docs[docID].connections += 1 # 1 more connection on the new port
 
     server = open_docs[docID].IP_PORT # get the IP:PORT
     server = str(server).split(':')

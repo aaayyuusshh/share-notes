@@ -7,17 +7,17 @@ export default function Document() {
   const [textValue, setTextValue] = useState("");
   //const ws = useRef(null);
 
-  const { port, id, docName } = useParams()
+  const { ip, port, id, docName } = useParams()
 
   const [webSocket, setWebSocket] = useState(null);
 
 
   useEffect(() => {
-    connectWebSocket(port, id, docName);
+    connectWebSocket(ip, port, id, docName);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const connectWebSocket = (port, id, docName) => {
+  const connectWebSocket = (ip, port, id, docName) => {
     const ws = new WebSocket('ws://localhost:' + port + '/ws/' + id + '/' + docName);
 
     ws.onopen = () => {
@@ -30,20 +30,24 @@ export default function Document() {
 
     ws.onclose = () => {
       console.log('WebSocket disconnected');
-      requestNewIPAndPort();
+      requestNewIPAndPort(ip, port, id);
     };
 
     setWebSocket(ws);
   };
 
-  const requestNewIPAndPort = () => {
+  const requestNewIPAndPort = (ip, port, id) => {
     try {
       fetch('http://127.0.0.1:8000/lostConnection/', {
         method: "POST",
         header: {
           "Content-Type": "application/json",
         },
-        body: id,
+        body: JSON.stringify({
+          IP: ip,
+          PORT: port,
+          docID: id
+        })
       })
       .then((response) => response.json())
       .then((data) => {
