@@ -44,9 +44,6 @@ lock = Lock() # NOTE: Lock is from threading, might have to use multiprocesser l
 # Tracking doc-primary_replica-clients coupling
 open_docs: dict[int, OpenDocInfo] = {}
 
-# TODO: a return to home screen and save button which will inform the server when a clinet disconnected 
-# NOTE: This can be done in the disconnect exception handling in the actual replica
-
 
 ### End points to deal with server requests and updates ###
 
@@ -142,14 +139,7 @@ async def transfer_conn(data_str: str = Body()):
     port = data['PORT']
     docID = int(data['docID'])
 
-    logger.info("IP:")
-    logger.info(ip)
-    logger.info("PORT:")
-    logger.info(port)
-    logger.info("docID:")
-    logger.info(docID)
-
-    global server_docs # NOTE: Needed to stop 'UnboundLocalError' as we are reassgining to server_docs within the function
+    global server_docs # NOTE: Need global to stop 'UnboundLocalError' as we are reassgining to server_docs within the function
     server_list = [x.IP_PORT for x in server_docs]
     logger.info("server_list before any if/else logic and removal of dead server")
     logger.info(server_list)
@@ -173,7 +163,7 @@ async def transfer_conn(data_str: str = Body()):
 
     server = open_docs[docID].IP_PORT # get the IP:PORT
     server = str(server).split(':')
-    logger.info("server:")
+    logger.info("Server client rerouted too:")
     logger.info(server)
 
     return {"IP": server[0], "port": server[1]}
