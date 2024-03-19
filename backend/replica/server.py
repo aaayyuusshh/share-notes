@@ -85,7 +85,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-@app.post("/newDocID/{docName}")
+@app.post("/newDocID/{docName}/")
 async def create_docID(s: Session, docName: str):
     docID = await create_document(s, docName)
     return {"docID": docID}
@@ -116,7 +116,6 @@ async def update_server_list(new_server_list: list[str]):
 
 @app.websocket("/ws/{document_id}/{docName}")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
-    print("My port is: ", MY_PORT)
     logger.info("running")
     await manager.connect(websocket)
 
@@ -158,6 +157,8 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
                     response = await connect_to_replica(document_id, docName, doc.content, server[0], server[1])
                 except TimeoutError:
                     server_list.remove(server_info)
+                    logger.info("Server_list after time out connecting to replica: ")
+                    logger.info(server_list)
                     continue
     except WebSocketDisconnect:
         # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
@@ -181,6 +182,7 @@ async def connect_to_replica(document_id: int, docName: str, content: str, IP: s
             return response
     except ConnectionRefusedError:
         print(f"Failed to connect to {uri}. Connection refused.")
+        raise TimeoutError # NOTE: TEMP CHANGE, DEAL WITH EXCEPTIONS PROPERLY
     except Exception as e:
         print(f"An error occurred: {e}")
         raise

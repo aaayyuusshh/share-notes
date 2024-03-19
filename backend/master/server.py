@@ -19,11 +19,6 @@ class OpenDocInfo:
         self.IP_PORT = IP_PORT
         self.connections = conn
 
-class LostConnection(BaseModel):
-    IP: str
-    PORT: str
-    docID: int
-
 # Create an instance of the FastAPI class
 app = FastAPI(title="Master Server")
 
@@ -59,8 +54,9 @@ open_docs: dict[int, OpenDocInfo] = {}
 async def con_server(IP: str, port: str, background_task: BackgroundTasks):
     with lock:
         # Track number of open docs on the server
-        server_docs.append(ServerInfo(f"{IP}:{port}", 0))
-        logger.info([x.IP_PORT for x in server_docs])
+        servers = [x.IP_PORT for x in server_docs]
+        if f"{IP}:{port}" not in servers:
+            server_docs.append(ServerInfo(f"{IP}:{port}", 0))
         # inform other servers that a new one joined
         background_task.add_task(broadcast_servers, server_docs)
     return {"message": "Server added to cluster"}
@@ -81,9 +77,10 @@ async def lost_client(docID: int):
     # if no more client ... remove this docID from being active
     if open_docs[docID].connections == 0: 
         try: 
+            logger.info("This was the last client tracked as being connected to that docID, which has now been removed from the open_docs dictionary")
             index = [ x.IP_PORT for x in server_docs ].index(open_docs[docID].IP_PORT)
             server_docs[index].docsOpen -= 1 # this replica is tracking one less document (increasing it priority to take on more docs in the future)
-            # open_docs.pop(docID, None) # ISSUE: Removes the key on server shutdown
+            open_docs.pop(docID, None) # ISSUE: Removes the key on server shutdown
             return {"Message": "Client lose acknowledged"}
         except ValueError:
             return {"Error": "Could not find the replica server the document was on"} # should never run
@@ -152,16 +149,18 @@ async def transfer_conn(data_str: str = Body()):
     logger.info("docID:")
     logger.info(docID)
 
+    global server_docs # NOTE: Needed to stop 'UnboundLocalError' as we are reassgining to server_docs within the function
     server_list = [x.IP_PORT for x in server_docs]
+    logger.info("server_list before any if/else logic and removal of dead server")
     logger.info(server_list)
 
     client_IP_PORT = ip + ':' + port
 
     # The first request to transfer will have the same IP_PORT
+    # NOTE: (docID not in open_docs) theoretically should never be true if the server crashes in a unclean manner 
     if (docID not in open_docs) or (open_docs[docID].IP_PORT == client_IP_PORT):
-        for server_doc in server_docs:
-            if server_doc.IP_PORT == client_IP_PORT:
-                server_docs.remove(server_doc) # remove the server from the active list of servers
+
+        server_docs = [s_doc for s_doc in server_docs if s_doc.IP_PORT != client_IP_PORT] # remove the server from the active list of servers
         if not server_docs:
             return {"Error": "no servers online to connect too"}
         # Get replica server with the least amount of documents open

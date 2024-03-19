@@ -6,7 +6,7 @@ import './App.css';
 export default function Document() {
   const [textValue, setTextValue] = useState("");
   //const ws = useRef(null);
-  const MASTER_IP = "10.13.95.92"
+  const MASTER_IP = "localhost"
 
   const { ip, port, id, docName } = useParams()
 
@@ -70,8 +70,8 @@ export default function Document() {
       const IP = data.IP.toString()
       const PORT = data.port.toString()
       console.log(IP)
-      console.log(port)
-      if (IP && port) {
+      console.log(PORT)
+      if (IP && PORT) {
         reconnectWebSocket(IP, PORT);
       } else {
         console.error('Failed to get new IP and port');
