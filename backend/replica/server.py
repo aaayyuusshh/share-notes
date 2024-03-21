@@ -114,6 +114,35 @@ async def update_server_list(new_server_list: list[str]):
     return {"message": "Server list updated successfully"}
 
 
+@app.post("/acqEdit")
+async def acquire(IP: str, port: str, docID: int):
+    pass
+
+
+@app.post("/reqEdit")
+async def request(IP: str, port: str, docID: int):
+    # if client is editing (i.e. you have the lock) add request to the queue
+    #if lock[docID]:
+    
+    pass
+
+
+    
+
+@app.post("/startEdit/")
+async def ask_perm(docID: int):
+    logger.info("docID: ")
+    logger.info(docID)
+
+    return {"Messsage": "Temp"}
+    
+    """
+    for server in server_list:
+        ip_port = server.split(":")
+        response = requests.post(f"http://{ip_port[0]}:{ip_port[1]}/reqEdit/", params={"IP": MY_IP, "port": MY_PORT, "docID": docID})
+    """
+        
+
 @app.websocket("/ws/{document_id}/{docName}")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
     logger.info("running")
@@ -122,11 +151,6 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
     logger.info(document_id)
     logger.info(docName)
     doc = await read_document(s, document_id)
-
-    # shouldn't happen
-    if not doc:
-        logger.info("Document had to be created, something went wrong")
-        doc = await create_document(s, document_id)
 
     await websocket.send_text(doc.content)
 
