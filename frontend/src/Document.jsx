@@ -8,6 +8,9 @@ export default function Document() {
   //const ws = useRef(null);
   const MASTER_IP = "localhost"
 
+
+  const [canEdit, setCanEdit] = useState(false);
+
   const { ip, port, id, docName } = useParams()
 
   const [webSocket, setWebSocket] = useState(null);
@@ -32,9 +35,12 @@ export default function Document() {
       console.log(ip_received===ip);
       // check IP value sent to server
       // if IP is different change TextValue
-      if (ip_received !== ip) {
-        setTextValue(event.data.substring(indexOfFirstColon + 1));
-      }
+      // if (ip_received !== ip) {
+      //   setTextValue(event.data.substring(indexOfFirstColon + 1));
+      // }
+
+      setTextValue(event.data.substring(indexOfFirstColon + 1));
+
     };
 
     ws.onclose = () => {
@@ -91,28 +97,27 @@ export default function Document() {
     connectWebSocket(IP, PORT);
   };
 
-  
-  /*
-  useEffect(() => {
-    // The port is passed as a paramter in the URL, ideally it would not be shown to the user (currently not transparent)
-    ws.current = new WebSocket('ws://localhost:' + port + '/ws/' + id + '/' + docName);
-    ws.current.onopen = () => {
-      console.log('WebSocket Connected');
-    };
-    ws.current.onmessage = (event) => {
-      console.log('Message from server ', event.data);
-      setTextValue(event.data);
-    };
-    ws.current.onclose = () => {
-      console.log('WebSocket Disconnected');
-    }
-    return () => {
-      if (!ws.current) {
-        ws.current.close();
-      }
-    };
-  }, []);
-  */
+
+  const handleStartEditing = () => {
+    setCanEdit(true);
+
+    fetch(`http://${ip}:${port}/startEdit/`, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        docID: id,
+      }),
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log('Success:', data);
+    })
+    .catch((error) => {
+      console.error('Error:', error);
+    });
+  };
 
   function handleUpdate(event) {
     const { value } = event.target;
@@ -132,6 +137,9 @@ export default function Document() {
       <div className="textContainer">
         <div className="container">
           <label htmlFor="textArea" className="textLabel">Your Document</label>
+          {!canEdit && (
+            <button onClick={handleStartEditing} className="editButton">Start Editing</button>
+          )}
           <textarea
             className="textArea"
             id="textArea"
@@ -140,29 +148,10 @@ export default function Document() {
             placeholder="Start typing your document..."
             value={textValue}
             onChange={handleUpdate}
+            disabled={!canEdit}
           />
         </div>
       </div>
     </div>
   );
 }
-
-// function to handle updates line by line (was overwritten in main branch had a copy in my local branch -Dvij)
-/*
-  function handleUpdate(event) {
-    const { value, selectionStart } = event.target;
-    setTextValue(value);
-
-    // Calculate the current line number and data
-    const lines = value.substr(0, selectionStart).split('\n');
-    const lineNumber = lines.length;
-    const currentLineData = lines[lines.length - 1] + value.substr(selectionStart).split('\n')[0];
-
-    console.log(`Line Number: ${lineNumber}, Line Data: '${currentLineData}'`);
-
-    // Send the line number and data if the WebSocket connection is open
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ line: lineNumber, data: currentLineData }));
-    }
-  }
-*/
