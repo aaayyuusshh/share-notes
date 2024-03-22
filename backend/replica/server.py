@@ -33,7 +33,10 @@ Session = Annotated[AsyncSession, Depends(session)]
 
 logger = logging.getLogger("uvicorn")
 
+# GLOBAL ARRAYS/QUEUES
 server_list = []
+locks = {int, bool}
+waiting = {int, bool}
 
 MY_PORT = os.getenv("PORT")
 logger.info(MY_PORT)
@@ -114,6 +117,10 @@ async def update_server_list(new_server_list: list[str]):
     return {"message": "Server list updated successfully"}
 
 
+@app.post("/doneEdit/")
+async def exit(IP: str, port: str, docID: int):
+    pass
+
 @app.post("/acqEdit")
 async def acquire(IP: str, port: str, docID: int):
     pass
@@ -122,10 +129,17 @@ async def acquire(IP: str, port: str, docID: int):
 @app.post("/reqEdit")
 async def request(IP: str, port: str, docID: int):
     # if client is editing (i.e. you have the lock) add request to the queue
-    #if lock[docID]:
-    
-    pass
-
+    if (docID in locks) and locks[docID]:
+        # Add it to docID specific queue
+        pass
+    # not editing the document
+    elif ((docID not in locks) or (not locks[docID])):
+        # Does not want to edit
+        if ((docID not in waiting) or (not waiting[docID])):
+            response = requests.post(f"http://{IP}:{port}/acqEdit/", params={"IP": MY_IP, "port": MY_PORT, "docID": docID})
+        else:
+            # dealing with priority
+            pass
 
     
 
@@ -134,14 +148,13 @@ async def ask_perm(docID: int):
     logger.info("docID: ")
     logger.info(docID)
 
-    return {"Messsage": "Temp"}
-    
-    """
     for server in server_list:
+        waiting[docID] = True # This replica wants this document
         ip_port = server.split(":")
         response = requests.post(f"http://{ip_port[0]}:{ip_port[1]}/reqEdit/", params={"IP": MY_IP, "port": MY_PORT, "docID": docID})
-    """
-        
+    
+    locks[docID] = True
+    return {"Message": "Success"}
 
 @app.websocket("/ws/{document_id}/{docName}")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
