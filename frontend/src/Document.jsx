@@ -11,6 +11,8 @@ export default function Document() {
 
   const [canEdit, setCanEdit] = useState(false);
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const { ip, port, id, docName } = useParams()
 
   const [webSocket, setWebSocket] = useState(null);
@@ -99,24 +101,29 @@ export default function Document() {
 
 
   const handleStartEditing = () => {
-    setCanEdit(true);
+    setIsLoading(true); // Start loading
 
-    fetch(`http://${ip}:${port}/startEdit/`, {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        docID: id,
-      }),
-    })
-    .then(response => response.json())
-    .then(data => {
-      console.log('Success:', data);
-    })
-    .catch((error) => {
-      console.error('Error:', error);
-    });
+  //   fetch(`http://${ip}:${port}/startEdit/`, {
+  //     method: "POST",
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //     },
+  //     body: JSON.stringify({
+  //       docID: id,
+  //     }),
+  //   })
+  //   .then(response => response.json())
+  //   .then(data => {
+  //     setIsLoading(false); // Stop loading on data receive
+  //     console.log('Success:', data);
+  //     if (data.Message === "Success") {
+  //       setCanEdit(true); // Enable editing only if the response is successful
+  //     }
+  //   })
+  //   .catch((error) => {
+  //     setIsLoading(false); // Stop loading on error
+  //     console.error('Error:', error);
+  //   });
   };
 
   function handleUpdate(event) {
@@ -138,7 +145,14 @@ export default function Document() {
         <div className="container">
           <label htmlFor="textArea" className="textLabel">Your Document</label>
           {!canEdit && (
-            <button onClick={handleStartEditing} className="editButton">Start Editing</button>
+            <>
+              {isLoading ? (
+                // add loading gif here
+                <div>Loading...</div>
+              ) : (
+                <button onClick={handleStartEditing} className="editButton">Start Editing</button>
+              )}
+            </>
           )}
           <textarea
             className="textArea"
