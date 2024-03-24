@@ -41,8 +41,10 @@ export default function Document() {
       //   setTextValue(event.data.substring(indexOfFirstColon + 1));
       // }
 
-      setTextValue(event.data.substring(indexOfFirstColon + 1));
-
+      newText = event.data.substring(indexOfFirstColon + 1);
+      if (newText !== textValue) {
+        setTextValue(newText);
+      }
     };
 
     ws.onclose = () => {
@@ -101,34 +103,18 @@ export default function Document() {
 
 
   const handleStartEditing = () => {
-    setIsLoading(true); // Start loading
-    setCanEdit(true);
-
-  //   fetch(`http://${ip}:${port}/startEdit/`, {
-  //     method: "POST",
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //     },
-  //     body: JSON.stringify({
-  //       docID: id,
-  //     }),
-  //   })
-  //   .then(response => response.json())
-  //   .then(data => {
-  //     setIsLoading(false); // Stop loading on data receive
-  //     console.log('Success:', data);
-  //     if (data.Message === "Success") {
-  //       setCanEdit(true); // Enable editing only if the response is successful
-  //     }
-  //   })
-  //   .catch((error) => {
-  //     setIsLoading(false); // Stop loading on error
-  //     console.error('Error:', error);
-  //   });
+    setIsLoading(true);
+    webSocket.send(JSON.stringify({ startEdit: true}));
+    webSocket.onmessage = (event) => {
+      console.log('Message from server ', event.data);
+      setIsLoading(false);
+      setCanEdit(true);
+    }
   };
 
   const handleStopEditing = () => {
     setCanEdit(False);
+    webSocket.send(JSON.stringify({ content: "*** STOP EDITING ***"}));
   };
 
   function handleUpdate(event) {
