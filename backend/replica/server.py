@@ -37,6 +37,8 @@ logger = logging.getLogger("uvicorn")
 server_list = []
 locks = {int, bool}
 waiting = {int, bool}
+acq_count = {int, int}
+doc_queues = {int, list}
 
 MY_PORT = os.getenv("PORT")
 logger.info(MY_PORT)
@@ -47,9 +49,17 @@ logger.info(MY_IP)
 MASTER_IP = os.getenv("MASTER_IP")
 logger.info(MASTER_IP)
 
+# TODO: DEAL with creation of documents when a replica has crashed (right now the master waits forever)
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI, s: Session):
     await create_all()
+    # Initailize variables for synchronization
+    docList = await s.execute(select(Document.id, Document.name))
+    for doc in docList:
+        locks[doc.id] = False
+        waiting[doc.id] = False
+        acq_count[doc.id] = 0
+        doc_queues[doc.id] = []
     # inform master that you want to be registered to the cluster
     reply = requests.post(f"http://{MASTER_IP}:8000/addServer/", params={"IP": MY_IP, "port": MY_PORT})
     logger.info("Passed the post reqest")
@@ -91,6 +101,8 @@ manager = ConnectionManager()
 @app.post("/newDocID/{docName}/")
 async def create_docID(s: Session, docName: str):
     docID = await create_document(s, docName)
+    locks[docID] = False
+    waiting[docID] = False
     return {"docID": docID}
 
 
@@ -117,6 +129,7 @@ async def update_server_list(new_server_list: list[str]):
     return {"message": "Server list updated successfully"}
 
 
+
 @app.post("/doneEdit/")
 async def exit(IP: str, port: str, docID: int):
     pass
@@ -129,32 +142,40 @@ async def acquire(IP: str, port: str, docID: int):
 @app.post("/reqEdit")
 async def request(IP: str, port: str, docID: int):
     # if client is editing (i.e. you have the lock) add request to the queue
-    if (docID in locks) and locks[docID]:
+    if locks[docID]:
         # Add it to docID specific queue
         pass
     # not editing the document
-    elif ((docID not in locks) or (not locks[docID])):
+    elif not locks[docID]:
         # Does not want to edit
-        if ((docID not in waiting) or (not waiting[docID])):
+        if (not waiting[docID]):
             response = requests.post(f"http://{IP}:{port}/acqEdit/", params={"IP": MY_IP, "port": MY_PORT, "docID": docID})
         else:
             # dealing with priority
             pass
 
-    
 
 @app.post("/startEdit/")
 async def ask_perm(docID: int):
     logger.info("docID: ")
     logger.info(docID)
 
+    waiting[docID] = True # This replica wants this document
+    #acq_count[docID] = 0 # Reset the count for number of acquires
+    doc_queues[docID].append("f{MY_IP}:{MY_PORT}")
+
+    # TODO: Deal with crashing of replicas (need a try catch)
     for server in server_list:
-        waiting[docID] = True # This replica wants this document
         ip_port = server.split(":")
-        response = requests.post(f"http://{ip_port[0]}:{ip_port[1]}/reqEdit/", params={"IP": MY_IP, "port": MY_PORT, "docID": docID})
+        if (ip_port[0] != MY_IP or ip_port[1] != MY_PORT):
+            response = requests.post(f"http://{ip_port[0]}:{ip_port[1]}/reqEdit/", params={"IP": MY_IP, "port": MY_PORT, "docID": docID})
     
     locks[docID] = True
-    return {"Message": "Success"}
+    waiting[docID] = False # No longer waiting as it has the write access
+    return {"Message": "Acquire requests sent"}
+
+
+
 
 @app.websocket("/ws/{document_id}/{docName}")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
