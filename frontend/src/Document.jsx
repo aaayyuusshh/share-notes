@@ -102,6 +102,7 @@ export default function Document() {
 
   const handleStartEditing = () => {
     setIsLoading(true); // Start loading
+    setCanEdit(true);
 
   //   fetch(`http://${ip}:${port}/startEdit/`, {
   //     method: "POST",
@@ -124,6 +125,10 @@ export default function Document() {
   //     setIsLoading(false); // Stop loading on error
   //     console.error('Error:', error);
   //   });
+  };
+
+  const handleStopEditing = () => {
+    setCanEdit(False);
   };
 
   function handleUpdate(event) {
@@ -152,6 +157,11 @@ export default function Document() {
               ) : (
                 <button onClick={handleStartEditing} className="editButton">Start Editing</button>
               )}
+            </>
+          )}
+          {canEdit && (
+            <>
+              <button onClick={handleStopEditing} className="editButton">Stop Editing</button>
             </>
           )}
           <textarea
