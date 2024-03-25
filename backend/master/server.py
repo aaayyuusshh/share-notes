@@ -66,6 +66,7 @@ def broadcast_servers(server_docs: list[ServerInfo]):
                 response = requests.post(f"http://{server[0]}:{server[1]}/updateServerList/", data=json.dumps(server_list))
                 logger.info(response)
                 # tell one server to start circulating the tokens for the documents
+                global tokens_not_initialized
                 if (tokens_not_initialized):
                     ack = requests.post(f"http://{server[0]}:{server[1]}/initializeTokens/")
                     logger.info(ack)
