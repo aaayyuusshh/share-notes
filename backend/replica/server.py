@@ -128,7 +128,6 @@ async def initialize_tokens(s:Session):
     logger.info(docList)
     for doc in docList:
         print("doc", doc[0])
-        print("I'm in the loop")
         send_token(doc[0])
 
 
@@ -271,6 +270,13 @@ async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, doc
         manager.disconnect(websocket)
         print(f"Connection closed with exception")
 
+# For testing
+@app.post("/createDoc/", response_model=Document)
+async def create_doc(docID: int, docName: str, docContent: str, s: Session):
+    doc = await create_document_with_content(s, docName, docContent)
+    return doc
+
+
 """
 @app.get("/users/")
 async def get_users(s: Session) -> list[User]:
@@ -280,10 +286,4 @@ async def get_users(s: Session) -> list[User]:
 @app.post("/users/")
 async def post_user(s: Session, uc: UserCreate) -> User:
     return await create_user(s, uc)
-
-# For testing
-@app.post("/createDoc/", response_model=Document)
-async def create_doc(docID: int, docName: str, docContent: str, s: Session):
-    doc = await create_document_with_content(s, docName, docContent)
-    return doc
 """

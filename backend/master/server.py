@@ -65,15 +65,17 @@ def broadcast_servers(server_docs: list[ServerInfo]):
                 server = str(server).split(':')
                 response = requests.post(f"http://{server[0]}:{server[1]}/updateServerList/", data=json.dumps(server_list))
                 logger.info(response)
-                # tell one server to start circulating the tokens for the documents
-                global tokens_not_initialized
-                if (tokens_not_initialized):
-                    ack = requests.post(f"http://{server[0]}:{server[1]}/initializeTokens/")
-                    logger.info(ack)
-                    tokens_not_initialized = False
 
             except Exception as e:
                 print(f"Failed to broadcast server list to server at IP {server}: {e}")
+        
+        # tell one server to start circulating the tokens for the documents
+        global tokens_not_initialized
+        server = server_list[0].split(':')
+        if (tokens_not_initialized and len(server_list) >= 2):
+            ack = requests.post(f"http://{server[0]}:{server[1]}/initializeTokens/")
+            logger.info(ack)
+            tokens_not_initialized = False
 
 @app.post("/lostClient/{ip}/{port}")
 async def lost_client(ip: str, port: str):
