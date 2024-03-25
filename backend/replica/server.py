@@ -50,12 +50,12 @@ logger.info(MASTER_IP)
 
 # TODO: DEAL with creation of documents when a replica has crashed (right now the master waits forever)
 @asynccontextmanager
-async def lifespan(app: FastAPI, s: Session):
+async def lifespan(app: FastAPI):
     await create_all()
     # Initailize variables for synchronization
-    docList = await s.execute(select(Document.id, Document.name))
-    for doc in docList:
-        doc_queues[doc.id] = []
+    #docList = await s.execute(select(Document.id, Document.name))
+    #for doc in docList:
+    #    doc_queues[doc.id] = []
     # inform master that you want to be registered to the cluster
     reply = requests.post(f"http://{MASTER_IP}:8000/addServer/", params={"IP": MY_IP, "port": MY_PORT})
     logger.info("Passed the post reqest")
@@ -137,6 +137,8 @@ async def recv_token(docID: int):
 
 @app.post("/recvToken/")
 async def recv_token(docID: int):
+    if docID not in doc_queues:
+        doc_queues[docID] = []
     if doc_queues[docID]:
         head = doc_queues[docID].pop(0)
         doc_permission[head] = True
