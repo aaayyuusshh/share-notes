@@ -125,7 +125,9 @@ async def update_server_list(new_server_list: list[str]):
 @app.post("/initializeTokens/")
 async def recv_tokens(s:Session):
     docList = await s.execute(select(Document.id, Document.name))
+    logger.info(docList)
     for doc in docList:
+        logger.info("Looping, ", doc.id)
         send_token(doc.id)
 
 
