@@ -123,7 +123,7 @@ async def update_server_list(new_server_list: list[str]):
 
 # For every document in its documement list, create a token and send it to its successor
 @app.post("/initializeTokens/")
-async def recv_tokens(s:Session):
+async def initialize_tokens(s:Session):
     docList = await s.execute(select(Document.id, Document.name))
     logger.info(docList)
     for doc in docList:
@@ -133,7 +133,7 @@ async def recv_tokens(s:Session):
 
 # Create a token ONLY for the specified docID
 @app.post("/initializeToken/{docID}/")
-async def recv_token(docID: int):
+async def initialize_token(docID: int):
     send_token(docID)
 
 
