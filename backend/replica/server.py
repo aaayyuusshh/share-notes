@@ -127,7 +127,8 @@ async def initialize_tokens(s:Session):
     docList = await s.execute(select(Document.id, Document.name))
     logger.info(docList)
     for doc in docList:
-        print(doc[0])
+        print("doc", doc[0])
+        print("I'm in the loop")
         send_token(doc[0])
 
 
@@ -139,6 +140,7 @@ async def initialize_token(docID: int):
 
 @app.post("/recvToken/")
 async def recv_token(docID: int):
+    print("Received token", docID)
     if docID not in doc_queues:
         doc_queues[docID] = []
     if doc_queues[docID]:
@@ -150,6 +152,7 @@ async def recv_token(docID: int):
 
 
 def send_token(docID: int):
+    print("Sending token", server_list[successor])
     reply = requests.post(f"http://{server_list[successor]}/recvToken/", params={"docID": docID})
     logger.info(reply)
 
