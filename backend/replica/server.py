@@ -127,8 +127,8 @@ async def recv_tokens(s:Session):
     docList = await s.execute(select(Document.id, Document.name))
     logger.info(docList)
     for doc in docList:
-        logger.info("Looping, ", doc.id)
-        send_token(doc.id)
+        print(doc[0])
+        send_token(doc[0])
 
 
 # Create a token ONLY for the specified docID
