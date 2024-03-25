@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from typing import Annotated, List, Any, Tuple, Dict
-from fastapi import Depends, Body, FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import Depends, Body, FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import logging
@@ -36,8 +36,8 @@ logger = logging.getLogger("uvicorn")
 # GLOBAL ARRAYS/QUEUES
 server_list = []
 successor = 0
-doc_queues = {int, list}
-doc_permission = {WebSocket, bool}
+doc_queues: dict[int, list] = {}
+doc_permission: dict[WebSocket, bool] = {}
 
 MY_PORT = os.getenv("PORT")
 logger.info(MY_PORT)
@@ -115,8 +115,10 @@ async def update_server_list(new_server_list: list[str]):
     global successor
     server_list = new_server_list
     index = server_list.index(f"{MY_IP}:{MY_PORT}")
-    successor = index+1 % len(server_list)
+    successor = (index+1) % len(server_list)
     logger.info(server_list)
+    logger.info("Index of successor: ")
+    logger.info(successor)
 
     return {"message": "Server list updated successfully"}
 
@@ -138,16 +140,17 @@ async def initialize_token(docID: int):
 
 
 @app.post("/recvToken/")
-async def recv_token(docID: int):
+async def recv_token(docID: int, background_task: BackgroundTasks):
     print("Received token", docID)
     if docID not in doc_queues:
         doc_queues[docID] = []
     if doc_queues[docID]:
         head = doc_queues[docID].pop(0)
         doc_permission[head] = True
+        return {f"Using the token for the following docID: {docID}"}
     else:
-        send_token(docID)
-    return {f"Token: {docID}"}
+        background_task.add_task(send_token, docID) # NOTE: Has to run as a background task or the calling send_token function in the ansestor waits forever
+        return {f"Don't need following id, passed it to my successor: {docID}"}
 
 
 def send_token(docID: int):
