@@ -35,10 +35,9 @@ logger = logging.getLogger("uvicorn")
 
 # GLOBAL ARRAYS/QUEUES
 server_list = []
-locks = {int, bool}
-waiting = {int, bool}
-acq_count = {int, int}
+successor = 0
 doc_queues = {int, list}
+doc_permission = {WebSocket, bool}
 
 MY_PORT = os.getenv("PORT")
 logger.info(MY_PORT)
@@ -56,9 +55,6 @@ async def lifespan(app: FastAPI, s: Session):
     # Initailize variables for synchronization
     docList = await s.execute(select(Document.id, Document.name))
     for doc in docList:
-        locks[doc.id] = False
-        waiting[doc.id] = False
-        acq_count[doc.id] = 0
         doc_queues[doc.id] = []
     # inform master that you want to be registered to the cluster
     reply = requests.post(f"http://{MASTER_IP}:8000/addServer/", params={"IP": MY_IP, "port": MY_PORT})
@@ -101,20 +97,12 @@ manager = ConnectionManager()
 @app.post("/newDocID/{docName}/")
 async def create_docID(s: Session, docName: str):
     docID = await create_document(s, docName)
-    locks[docID] = False
-    waiting[docID] = False
+    doc_queues[docID] = [] # create queue for docID
     return {"docID": docID}
-
-
-@app.post("/createDoc/", response_model=Document)
-async def create_doc(docID: int, docName: str, docContent: str, s: Session):
-    doc = await create_document_with_content(s, docName, docContent)
-    return doc
 
 
 @app.get("/docList/", response_model=List[DocumentList])
 async def doc_list(s: Session) -> Any:
-    #docList = await doc_list(s)
     docList = await s.execute(select(Document.id, Document.name))
     return docList
 
@@ -124,56 +112,42 @@ async def doc_list(s: Session) -> Any:
 @app.post("/updateServerList/")
 async def update_server_list(new_server_list: list[str]):
     global server_list
+    global successor
     server_list = new_server_list
+    index = server_list.index(f"{MY_IP}:{MY_PORT}")
+    successor = index+1 % len(server_list)
     logger.info(server_list)
+
     return {"message": "Server list updated successfully"}
 
 
-
-@app.post("/doneEdit/")
-async def exit(IP: str, port: str, docID: int):
-    pass
-
-@app.post("/acqEdit")
-async def acquire(IP: str, port: str, docID: int):
-    pass
+# For every document in its documement list, create a token and send it to its successor
+@app.post("/initializeTokens/")
+async def recv_token(s:Session, docID: int):
+    docList = await s.execute(select(Document.id, Document.name))
+    for doc in docList:
+        send_token(doc.id)
 
 
-@app.post("/reqEdit")
-async def request(IP: str, port: str, docID: int):
-    # if client is editing (i.e. you have the lock) add request to the queue
-    if locks[docID]:
-        # Add it to docID specific queue
-        pass
-    # not editing the document
-    elif not locks[docID]:
-        # Does not want to edit
-        if (not waiting[docID]):
-            response = requests.post(f"http://{IP}:{port}/acqEdit/", params={"IP": MY_IP, "port": MY_PORT, "docID": docID})
-        else:
-            # dealing with priority
-            pass
+# Create a token ONLY for the specified docID
+@app.post("/initializeToken/{docID}/")
+async def recv_token(docID: int):
+    send_token(docID)
 
 
-@app.post("/startEdit/")
-async def ask_perm(docID: int):
-    logger.info("docID: ")
-    logger.info(docID)
+@app.post("/recvToken/")
+async def recv_token(docID: int):
+    if doc_queues[docID]:
+        head = doc_queues[docID].pop(0)
+        doc_permission[head] = True
+    else:
+        send_token(docID)
+    return {f"Token: {docID}"}
 
-    waiting[docID] = True # This replica wants this document
-    #acq_count[docID] = 0 # Reset the count for number of acquires
-    doc_queues[docID].append("f{MY_IP}:{MY_PORT}")
 
-    # TODO: Deal with crashing of replicas (need a try catch)
-    for server in server_list:
-        ip_port = server.split(":")
-        if (ip_port[0] != MY_IP or ip_port[1] != MY_PORT):
-            response = requests.post(f"http://{ip_port[0]}:{ip_port[1]}/reqEdit/", params={"IP": MY_IP, "port": MY_PORT, "docID": docID})
-    
-    locks[docID] = True
-    waiting[docID] = False # No longer waiting as it has the write access
-    return {"Message": "Acquire requests sent"}
-
+def send_token(docID: int):
+    reply = requests.post(f"http://{server_list[successor]}/recvToken/", params={"docID": docID})
+    logger.info(reply)
 
 
 
@@ -190,37 +164,54 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
 
     try:
         while True:
+            # Data is client request to edit
             data = await websocket.receive_text()
-            # parse data json
-            json_data = json.loads(data)
-            data = json_data['content']
-
-            ip_client = json_data['ip']
-            logger.info("Content: ")
             logger.info(data)
-            logger.info("IP: ")
-            logger.info(ip_client)
 
-            await manager.broadcast(ip_client + ":" + data)
+            doc_queues[document_id].append(websocket)
+            doc_permission[websocket] = False
+            # Loop the socket while you don't have permission
+            while not doc_permission[websocket]:
+                continue
 
-            doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
-            # await manager.broadcast(doc.content)
+            websocket.send_text("Acquired: True")
 
-            for server_info in server_list:
-                # TODO: should also check for same IP
-                server = server_info.split(':')
-                if server[0] == MY_IP and server[1] == MY_PORT:
-                    continue
-                try:
-                    response = await connect_to_replica(document_id, docName, doc.content, server[0], server[1])
-                except TimeoutError:
-                    server_list.remove(server_info)
-                    logger.info("Server_list after time out connecting to replica: ")
-                    logger.info(server_list)
-                    continue
+            while True:
+                data = await websocket.receive_text()
+                # parse data json
+                json_data = json.loads(data)
+                data = json_data['content']
+                if (data == "*** STOP EDITING ***"):
+                    send_token(document_id)
+                    break
+
+                ip_client = json_data['ip']
+                logger.info("Content: ")
+                logger.info(data)
+                logger.info("IP: ")
+                logger.info(ip_client)
+
+                await manager.broadcast(ip_client + ":" + data)
+
+                doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
+                # await manager.broadcast(doc.content)
+
+                for server_info in server_list:
+                    # TODO: should also check for same IP
+                    server = server_info.split(':')
+                    if server[0] == MY_IP and server[1] == MY_PORT:
+                        continue
+                    try:
+                        response = await connect_to_replica(document_id, docName, doc.content, server[0], server[1])
+                    except TimeoutError:
+                        server_list.remove(server_info)
+                        logger.info("Server_list after time out connecting to replica: ")
+                        logger.info(server_list)
+                        continue
     except WebSocketDisconnect:
         # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
         response = requests.post(f"http://{MASTER_IP}:8000/lostClient/", params={"docID": document_id})
+        send_token(document_id) # TODO: What to do if the client closes tab without pressing stop edit button
         logger.info(response)
         # Then disconnect
         manager.disconnect(websocket)
@@ -282,4 +273,10 @@ async def get_users(s: Session) -> list[User]:
 @app.post("/users/")
 async def post_user(s: Session, uc: UserCreate) -> User:
     return await create_user(s, uc)
+
+# For testing
+@app.post("/createDoc/", response_model=Document)
+async def create_doc(docID: int, docName: str, docContent: str, s: Session):
+    doc = await create_document_with_content(s, docName, docContent)
+    return doc
 """
