@@ -141,7 +141,7 @@ async def initialize_token(docID: int):
 
 
 @app.post("/recvToken/")
-async def recv_token(docID: int, background_task: BackgroundTasks):
+def recv_token(docID: int, background_task: BackgroundTasks):
     print("Received token", docID)
     if docID not in doc_queues:
         doc_queues[docID] = []
@@ -182,10 +182,14 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
             doc_queues[document_id].append(websocket)
             doc_permission[websocket] = False
             # Loop the socket while you don't have permission
-            while not doc_permission[websocket]:
-                continue
+            # while not doc_permission[websocket]:
+            #     print("Waiting for permission")
+            #     continue
+            time.sleep(2)
 
-            websocket.send_text("Acquired: True")
+            print("telling client, lock acquired")
+
+            await websocket.send_text("Acquired: True")
 
             while True:
                 data = await websocket.receive_text()

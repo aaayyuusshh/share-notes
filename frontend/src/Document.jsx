@@ -33,7 +33,7 @@ export default function Document() {
       console.log('Message from server ', event.data);
 
       if (event.data !== textValue) {
-        setTextValue(newText);
+        setTextValue(event.data);
       }
     };
 
