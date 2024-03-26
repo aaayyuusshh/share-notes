@@ -197,6 +197,7 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
                 json_data = json.loads(data)
                 data = json_data['content']
                 if (data == "*** STOP EDITING ***"):
+                    print("Client said done editing")
                     send_token(document_id)
                     break
 
