@@ -21,6 +21,7 @@ from db import (
 )
 import websockets
 import requests
+import time
 
 # alternative to directly defining paramter type
 from pydantic import BaseModel
@@ -154,7 +155,8 @@ async def recv_token(docID: int, background_task: BackgroundTasks):
 
 
 def send_token(docID: int):
-    print("Sending token", server_list[successor])
+    print("Sending token", server_list[successor], "for docID", docID)
+    time.sleep(1)
     reply = requests.post(f"http://{server_list[successor]}/recvToken/", params={"docID": docID})
     logger.info(reply)
 
