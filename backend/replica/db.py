@@ -100,9 +100,9 @@ async def create_document_with_content(s: AsyncSession, docName: str, docContent
 
 
 # Causes errors
-async def doc_list(s: AsyncSession):
-    q = select(Document.id, Document.name)
-    doc_list = await s.execute(q)
+async def doc_list_db():
+    async with SessionMaker() as s:
+        doc_list = await s.execute(select(Document.id))
     return doc_list
 
 

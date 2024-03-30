@@ -31,10 +31,16 @@ export default function Document() {
     };
     ws.onmessage = (event) => {
       console.log('Message from server ', event.data);
-
-      if (event.data !== textValue) {
-        setTextValue(event.data);
+      console.log('IN THE connectWebSocket function')
+      if (event.data === "*** START EDITING ***") {
+        setIsLoading(false);
+        setCanEdit(true);
       }
+      else if (!canEdit) {
+        setTextValue(event.data)
+      }
+      // Shouldn't need this as only once client can update
+      //setTextValue(event.data);
     };
 
     ws.onclose = () => {
@@ -94,16 +100,12 @@ export default function Document() {
 
   const handleStartEditing = () => {
     setIsLoading(true);
+    //NOTE: On the server side, any message sent is interpreted as a request to edit
     webSocket.send(JSON.stringify({ startEdit: true}));
-    webSocket.onmessage = (event) => {
-      console.log('Message from server ', event.data);
-      setIsLoading(false);
-      setCanEdit(true);
-    }
   };
 
   const handleStopEditing = () => {
-    setCanEdit(False);
+    setCanEdit(false);
     webSocket.send(JSON.stringify({ content: "*** STOP EDITING ***"}));
   };
 
@@ -113,7 +115,7 @@ export default function Document() {
 
     // Send textValue if the ws is open
     if (webSocket && webSocket.readyState === WebSocket.OPEN) {
-      webSocket.send(JSON.stringify({ content: value, ip: ip }));
+      webSocket.send(JSON.stringify({ content: value }));
     }
   }
 
@@ -148,7 +150,7 @@ export default function Document() {
             placeholder="Start typing your document..."
             value={textValue}
             onChange={handleUpdate}
-            disabled={!canEdit}
+            disabled={!canEdit} // This is causing problems
           />
         </div>
       </div>

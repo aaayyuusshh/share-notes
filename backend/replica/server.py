@@ -17,11 +17,14 @@ from db import (
     read_document,
     session,
     update_document,
-    create_repl_document
+    create_repl_document,
+    doc_list_db
 )
 import websockets
 import requests
 import time
+import asyncio
+from collections import defaultdict
 
 # alternative to directly defining paramter type
 from pydantic import BaseModel
@@ -54,12 +57,9 @@ logger.info(MASTER_IP)
 async def lifespan(app: FastAPI):
     await create_all()
     # Initailize variables for synchronization
-    #docList = await s.execute(select(Document.id, Document.name))
-    #for doc in docList:
-    #    doc_queues[doc.id] = []
+    await create_doc_queues()
     # inform master that you want to be registered to the cluster
     reply = requests.post(f"http://{MASTER_IP}:8000/addServer/", params={"IP": MY_IP, "port": MY_PORT})
-    logger.info("Passed the post reqest")
     logger.info(reply)
     yield
 
@@ -79,20 +79,29 @@ app.add_middleware(
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: list[WebSocket] = []
+        self.active_connections: dict[int, list] = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, docID: int, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections.setdefault(docID, []).append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+    def disconnect(self, docID: int, websocket: WebSocket):
+        self.active_connections[docID].remove(websocket)
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
+    async def broadcast(self, docID: int, message: str):
+        if docID in self.active_connections:
+            for connection in self.active_connections[docID]:
+                await connection.send_text(message)
 
 manager = ConnectionManager()
+
+
+# Function for populating queues for each document
+async def create_doc_queues():
+    docList = await doc_list_db()
+    for doc in docList:
+        logger.info(doc[0])
+        doc_queues[int(doc[0])] = []
 
 
 @app.post("/newDocID/{docName}/")
@@ -126,7 +135,8 @@ async def update_server_list(new_server_list: list[str]):
 
 # For every document in its documement list, create a token and send it to its successor
 @app.post("/initializeTokens/")
-async def initialize_tokens(s:Session):
+async def initialize_tokens(s: Session):
+    logger.info("INITIALIZE TOKENS (ALL)")
     docList = await s.execute(select(Document.id, Document.name))
     logger.info(docList)
     for doc in docList:
@@ -137,38 +147,36 @@ async def initialize_tokens(s:Session):
 # Create a token ONLY for the specified docID
 @app.post("/initializeToken/{docID}/")
 async def initialize_token(docID: int):
+    logger.info("INITIALIZE TOKEN (ONE)")
     send_token(docID)
 
 
 @app.post("/recvToken/")
 def recv_token(docID: int, background_task: BackgroundTasks):
-    print("Received token", docID)
-    if docID not in doc_queues:
-        doc_queues[docID] = []
+    logger.info(f"Received token: {docID}")
+    time.sleep(1)
     if doc_queues[docID]:
         head = doc_queues[docID].pop(0)
         doc_permission[head] = True
         return {f"Using the token for the following docID: {docID}"}
     else:
         background_task.add_task(send_token, docID) # NOTE: Has to run as a background task or the calling send_token function in the ansestor waits forever
-        return {f"Don't need following id, passed it to my successor: {docID}"}
+        return {f"Do not need following id {docID}, passed it to my successor {server_list[successor]}"}
 
 
 def send_token(docID: int):
-    print("Sending token", server_list[successor], "for docID", docID)
-    time.sleep(1)
+    logger.info(f"Sending token to {server_list[successor]} for docID {docID}")
     reply = requests.post(f"http://{server_list[successor]}/recvToken/", params={"docID": docID})
-    logger.info(reply)
+    logger.info(str(reply.content))
 
 
 
 @app.websocket("/ws/{document_id}/{docName}")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
     logger.info("running")
-    await manager.connect(websocket)
+    await manager.connect(document_id, websocket)
 
-    logger.info(document_id)
-    logger.info(docName)
+    logger.info(f"{document_id} {docName}")
     doc = await read_document(s, document_id)
 
     await websocket.send_text(doc.content)
@@ -181,15 +189,17 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
 
             doc_queues[document_id].append(websocket)
             doc_permission[websocket] = False
+            logger.info(f"Adding websocket to queue for docID: {document_id}")
             # Loop the socket while you don't have permission
-            # while not doc_permission[websocket]:
-            #     print("Waiting for permission")
-            #     continue
-            time.sleep(2)
+            while not doc_permission[websocket]:
+                logger.info(f"{doc_permission[websocket]}")
+                logger.info("Waiting for permission")
+                await asyncio.sleep(2)
+                continue
 
-            print("telling client, lock acquired")
+            logger.info("telling client, lock acquired")
 
-            await websocket.send_text("Acquired: True")
+            await websocket.send_text("*** START EDITING ***")
 
             while True:
                 data = await websocket.receive_text()
@@ -197,40 +207,37 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
                 json_data = json.loads(data)
                 data = json_data['content']
                 if (data == "*** STOP EDITING ***"):
-                    print("Client said done editing")
+                    logger.info("Client said done editing")
                     send_token(document_id)
                     break
 
-                ip_client = json_data['ip']
                 logger.info("Content: ")
                 logger.info(data)
-                logger.info("IP: ")
-                logger.info(ip_client)
 
-                await manager.broadcast(ip_client + ":" + data)
-
+                # Update document in this replica's database
                 doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
-                # await manager.broadcast(doc.content)
+                # NOTE: Broadcast changes to any websockets on THIS replica working on that document
+                await manager.broadcast(document_id, data)
 
                 for server_info in server_list:
-                    # TODO: should also check for same IP
                     server = server_info.split(':')
+                    # Don't update yourself
                     if server[0] == MY_IP and server[1] == MY_PORT:
                         continue
                     try:
                         response = await connect_to_replica(document_id, docName, doc.content, server[0], server[1])
                     except TimeoutError:
                         server_list.remove(server_info)
-                        logger.info("Server_list after time out connecting to replica: ")
+                        logger.info("Server_list after removing server which caused the time out: ")
                         logger.info(server_list)
                         continue
     except WebSocketDisconnect:
+        manager.disconnect(document_id, websocket)
         # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
         response = requests.post(f"http://{MASTER_IP}:8000/lostClient/", params={"docID": document_id})
         send_token(document_id) # TODO: What to do if the client closes tab without pressing stop edit button
         logger.info(response)
         # Then disconnect
-        manager.disconnect(websocket)
 
 
 # create websocket to connect to replica
@@ -255,15 +262,10 @@ async def connect_to_replica(document_id: int, docName: str, content: str, IP: s
 
 @app.websocket("/replica/ws/{document_id}/{docName}")
 async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
-    await manager.connect(websocket)
+    await manager.connect(document_id, websocket)
     print(f"Connected to document {document_id} with name {docName}")
 
     doc = await read_document(s, document_id)
-
-    # shouldn't happen
-    if not doc:
-        logger.info("Document had to be created, something went wrong")
-        await create_repl_document(s, docName, document_id)
 
     try:
         while True:
@@ -273,11 +275,14 @@ async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, doc
             # parse data json
             data = json.loads(data)['content']
 
+            # Update the document in your replicate database
             doc = await update_document(s, DocumentUpdate(content=data, id=document_id, name=docName))
-            print(f"{MY_PORT}")
+            # NOTE: Broadcast changes to any clients who might be waiting to edit the document
+            await manager.broadcast(document_id, data)
+
             await websocket.send_text(f"ack from replica {MY_PORT}")
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager.disconnect(document_id, websocket)
         print(f"Connection closed with exception")
 
 # For testing
