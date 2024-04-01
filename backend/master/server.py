@@ -7,7 +7,7 @@ import requests
 import logging
 from threading import Lock
 import json
-
+import time
 
 class ServerInfo:
     def __init__(self, IP_PORT: str, clients_online: int) -> None:
@@ -22,8 +22,13 @@ class OpenDocInfo:
 # GLOBAL VARIABLES for instance of master server
 tokens_not_initialized = True
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    loop_servers_hearbeat()
+    yield
+
 # Create an instance of the FastAPI class
-app = FastAPI(title="Master Server")
+app = FastAPI(title="Master Server", lifespan=lifespan)
 
 # Adding CORS permissions for client
 origins = [
@@ -170,33 +175,23 @@ def doc_list() -> Any:
     return ret_obj.json()
 
 # heartbeat to check if all servers in server is still alive
-# @app.post("/addServer/")
-# async def con_server(IP: str, port: str, background_task: BackgroundTasks):
-#     with lock:
-#         # Track number of clients on the server
-#         servers = [x.IP_PORT for x in server_docs]
-#         if f"{IP}:{port}" not in servers:
-#             server_docs.append(ServerInfo(f"{IP}:{port}", 0))
-#         # inform other servers that a new one joined
-#         background_task.add_task(broadcast_servers, server_docs)
-#     return {"Message": "Server added to cluster"}
+def loop_servers_hearbeat():
+    while True:
+        heartbeat(server_docs)   
+        time.sleep(5) 
 
-# def broadcast_servers(server_docs: list[ServerInfo]):
-#     server_list = [x.IP_PORT for x in server_docs] # get the IP_PORT info from the objects
-#     with lock:
-#         for server in server_list:
-#             try:
-#                 server = str(server).split(':')
-#                 response = requests.post(f"http://{server[0]}:{server[1]}/updateServerList/", data=json.dumps(server_list))
-#                 logger.info(response)
+def heartbeat(server_docs: list[ServerInfo]):
+    server_list = [x.IP_PORT for x in server_docs] # get the IP_PORT info from the objects
+    with lock:
+        for server in server_list:
+            try:
+                server = str(server).split(':')
+                response = requests.post(f"http://{server[0]}:{server[1]}/heartbeatCheck/", data={"heartbeat": "True"})
+                logger.info(response)
 
-#             except Exception as e:
-#                 print(f"Failed to broadcast server list to server at IP {server}: {e}")
-        
-#         # tell one server to start circulating the tokens for the documents
-#         global tokens_not_initialized
-#         server = server_list[0].split(':')
-#         if (tokens_not_initialized and len(server_list) >= 2):
-#             ack = requests.post(f"http://{server[0]}:{server[1]}/initializeTokens/")
-#             logger.info(ack)
-#             tokens_not_initialized = False
+                if response.status_code == 404:
+                    logger.info(f"Server at IP {server}")
+
+            except Exception as e:
+                print(f"Failed to broadcast heartbeat to server at IP {server}: {e}")
+    
