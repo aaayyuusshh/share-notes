@@ -168,3 +168,35 @@ def doc_list() -> Any:
     ret_obj = requests.get(f'http://{server_docs[0].IP_PORT.split(':')[0]}:{server_docs[0].IP_PORT.split(':')[1]}/docList/')
     logger.info(ret_obj.json())
     return ret_obj.json()
+
+# heartbeat to check if all servers in server is still alive
+# @app.post("/addServer/")
+# async def con_server(IP: str, port: str, background_task: BackgroundTasks):
+#     with lock:
+#         # Track number of clients on the server
+#         servers = [x.IP_PORT for x in server_docs]
+#         if f"{IP}:{port}" not in servers:
+#             server_docs.append(ServerInfo(f"{IP}:{port}", 0))
+#         # inform other servers that a new one joined
+#         background_task.add_task(broadcast_servers, server_docs)
+#     return {"Message": "Server added to cluster"}
+
+# def broadcast_servers(server_docs: list[ServerInfo]):
+#     server_list = [x.IP_PORT for x in server_docs] # get the IP_PORT info from the objects
+#     with lock:
+#         for server in server_list:
+#             try:
+#                 server = str(server).split(':')
+#                 response = requests.post(f"http://{server[0]}:{server[1]}/updateServerList/", data=json.dumps(server_list))
+#                 logger.info(response)
+
+#             except Exception as e:
+#                 print(f"Failed to broadcast server list to server at IP {server}: {e}")
+        
+#         # tell one server to start circulating the tokens for the documents
+#         global tokens_not_initialized
+#         server = server_list[0].split(':')
+#         if (tokens_not_initialized and len(server_list) >= 2):
+#             ack = requests.post(f"http://{server[0]}:{server[1]}/initializeTokens/")
+#             logger.info(ack)
+#             tokens_not_initialized = False

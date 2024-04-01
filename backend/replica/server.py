@@ -154,7 +154,7 @@ async def initialize_token(docID: int):
 @app.post("/recvToken/")
 def recv_token(docID: int, background_task: BackgroundTasks):
     logger.info(f"Received token: {docID}")
-    time.sleep(1)
+    time.sleep(0.1)
     if doc_queues[docID]:
         head = doc_queues[docID].pop(0)
         doc_permission[head] = True
@@ -194,7 +194,7 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
             while not doc_permission[websocket]:
                 logger.info(f"{doc_permission[websocket]}")
                 logger.info("Waiting for permission")
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.1)
                 continue
 
             logger.info("telling client, lock acquired")
@@ -235,7 +235,8 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
         manager.disconnect(document_id, websocket)
         # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
         response = requests.post(f"http://{MASTER_IP}:8000/lostClient/", params={"docID": document_id})
-        send_token(document_id) # TODO: What to do if the client closes tab without pressing stop edit button
+        if doc_permission[websocket] == True:
+            send_token(document_id) # TODO: What to do if the client closes tab without pressing stop edit button
         logger.info(response)
         # Then disconnect
 
