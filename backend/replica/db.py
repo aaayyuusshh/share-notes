@@ -20,11 +20,9 @@ class DocumentBase(SQLModel):
     name: str
     content: str
 
-
 class DocumentList(SQLModel):
     id: int
     name: str
-
 
 class Document(DocumentBase, table=True):
     id: int = Field(primary_key=True)

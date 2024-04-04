@@ -5,26 +5,29 @@ import './App.css';
 
 export default function Document() {
   const [textValue, setTextValue] = useState("");
-  //const ws = useRef(null);
+
   const MASTER_IP = "localhost"
-
-
-  const [canEdit, setCanEdit] = useState(false);
-
-  const [isLoading, setIsLoading] = useState(false);
 
   const { ip, port, id, docName } = useParams()
 
   const [webSocket, setWebSocket] = useState(null);
 
+  const [canEdit, setCanEdit] = useState(false);
+
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [isReconnecting, setIsReconnecting] = useState(false);
+
 
   useEffect(() => {
     connectWebSocket(ip, port);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const connectWebSocket = (ip, port) => {
-    const ws = new WebSocket('ws://' + ip + ':' + port + '/ws/' + id + '/' + docName);
+    // Sending 'canEdit' will be false in everycase except when the clinet was editing and lost connection
+    // In that case, the canEdit flag is used to tell the replica to generate a new token and make sure this client gets
+    // first access to continue editing seamlessly
+    const ws = new WebSocket('ws://' + ip + ':' + port + '/ws/' + id + '/' + docName + '/' + canEdit + '/');
 
     ws.onopen = () => {
       console.log('WebSocket Connected');
@@ -35,6 +38,7 @@ export default function Document() {
       if (event.data === "*** START EDITING ***") {
         setIsLoading(false);
         setCanEdit(true);
+        setIsReconnecting(false);
       }
       else if (!canEdit) {
         setTextValue(event.data)
@@ -45,6 +49,9 @@ export default function Document() {
 
     ws.onclose = () => {
       console.log('WebSocket disconnected');
+      setIsLoading(true);
+      // canEdit can't be used as I pass it as a flag to the websocket connection
+      setIsReconnecting(true); // used to gray out the textbox
       requestNewIPAndPort(ip, port);
     };
 
@@ -150,7 +157,7 @@ export default function Document() {
             placeholder="Start typing your document..."
             value={textValue}
             onChange={handleUpdate}
-            disabled={!canEdit} // This is causing problems
+            disabled={!canEdit || isReconnecting} // This is causing problems
           />
         </div>
       </div>
