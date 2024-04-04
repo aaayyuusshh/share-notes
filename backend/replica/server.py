@@ -184,7 +184,7 @@ def send_token(docID: int):
             global server_list
 
             logger.info("Sending token")
-            time.sleep(0.1)
+            time.sleep(2)
             logger.info(f"Server_list before call to recvToken (token counter {send_token_count}): {server_list}")
             with succ_lock:
                 succ_server = server_list[successor]
@@ -268,7 +268,7 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
             while not doc_permission[websocket]:
                 logger.info(f"{doc_permission[websocket]}")
                 logger.info("Waiting for permission")
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(2)
                 continue
 
             logger.info("telling client, lock acquired")
