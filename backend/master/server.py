@@ -6,10 +6,25 @@ from typing import Optional, Annotated, List, Any
 import requests
 #import aiohttp  NOTE: The 'requests' module is not asyncronous, this one is ... I am not sure if being sychornous will issues
 import logging
-from threading import Lock
+from threading import Lock, Timer
 import json
-import time
-from backend.master.timer import ResettableTimer
+
+
+# From: https://stackoverflow.com/questions/56167390/resettable-timer-object-implementation-python
+class ResettableTimer(object):
+    def __init__(self, interval, function, docID):
+        self.interval = interval
+        self.function = function
+        self.docID = docID
+        self.timer = Timer(self.interval, self.function, [self.docID])
+
+    def run(self):
+        self.timer.start()
+
+    def reset(self):
+        self.timer.cancel()
+        self.timer = Timer(self.interval, self.function, [self.docID])
+        self.timer.start()
 
 class ServerInfo:
     def __init__(self, IP_PORT: str, clients_online: int) -> None:
@@ -68,6 +83,7 @@ async def con_server(IP: str, port: str, background_task: BackgroundTasks):
         background_task.add_task(broadcast_servers, server_docs)
     return {"Message": "Server added to cluster"}
 
+
 def broadcast_servers(server_docs: list[ServerInfo]):
     server_list = [x.IP_PORT for x in server_docs] # get the IP_PORT info from the objects
     with lock:
@@ -75,29 +91,38 @@ def broadcast_servers(server_docs: list[ServerInfo]):
             try:
                 server = str(server).split(':')
                 response = requests.post(f"http://{server[0]}:{server[1]}/updateServerList/", data=json.dumps(server_list))
-                logger.info(response)
 
             except Exception as e:
                 print(f"Failed to broadcast server list to server at IP {server}: {e}")
         
         # tell one server to start circulating the tokens for the documents
         global tokens_not_initialized
-        server = server_list[0].split(':')
         if (tokens_not_initialized and len(server_list) >= 2):
-            ack = requests.post(f"http://{server[0]}:{server[1]}/initializeTokens/")
+
             # Get the list of document_ids which need to be tracked by the heartbeat
+            server = server_list[0].split(':')
             ret_obj = requests.get(f'http://{server[0]}:{server[1]}/docList/')
-            global docID_list
-            global docID_timers
-            docID_list = [int(docObj.id) for docObj in ret_obj]
-            logger.info("List of Doc IDs in master:")
-            logger.info(docID_list)
+            logger.info("docList return object")
+            doc_list = ret_obj.json()
+            logger.info(doc_list)
 
-            # Start the 5 second timers for the tokens
-            for docID in docID_list:
-                docID_timers[docID] = ResettableTimer(5, token_timeout, docID)
+            # NOTE: only work on the document list if it is not empty
+            if doc_list:
+                global docID_timers
+                docID_list = [int(doc['id']) for doc in doc_list]
+                logger.info("List of Doc IDs in master:")
+                logger.info(docID_list)
+                # Start the 5 second timers for the tokens
+                for docID in docID_list:
+                    docID_timers[docID] = ResettableTimer(5, token_timeout, docID)
 
+            # Start the token circulation
+            logger.info("Reached before tokens call")
+            ack = requests.post(f"http://{server[0]}:{server[1]}/initializeTokens/")
             tokens_not_initialized = False
+            logger.info("Reached after tokens call")
+        
+        logger.info("Done broadcasting to servers")
 
 @app.post("/lostClient/{ip}/{port}")
 async def lost_client(ip: str, port: str):
@@ -132,7 +157,6 @@ async def create_doc_and_conn(docName: str = Body()):
     # Create a token for the new document and add it to the list of DocIDs which need to be checked by the heartbeat
     response = requests.post(f"http://{server[0]}:{server[1]}/initializeToken/{docID}/")
     logger.info(response)
-    docID_list.append(docID)
 
     # Start the 5 second timer for this new token
     global docID_timers
@@ -157,6 +181,7 @@ async def conn_to_existing_doc(docID: str = Body()):
 def doc_list() -> Any:
     # defaulting to getting list from the first server
     ret_obj = requests.get(f'http://{server_docs[0].IP_PORT.split(':')[0]}:{server_docs[0].IP_PORT.split(':')[1]}/docList/')
+    logger.info("docList return object, requested by client")
     logger.info(ret_obj.json())
     return ret_obj.json()
 
@@ -169,11 +194,13 @@ def token_timeout(docID: int):
     server = str(server).split(':')
     response = requests.post(f"http://{server[0]}:{server[1]}/initializeToken/{docID}/")
 
+
 @app.post("/replicaRecvToken/{docID}/")
-def replica_received_token(docID: int):
+async def replica_received_token(docID: int):
     global docID_timers
     # NOTE: docID should always be in the dict (if it isn't then something when very wrong)
     docID_timers[docID].reset()
+    return {"Message": f"ack for {docID}"}
 
 
 @app.post("/succCrashed/{crashed_ip}/{crashed_port}/")
@@ -186,8 +213,11 @@ def replica_successor_crashed(crashed_ip: str, crashed_port: str, background_tas
         index = servers.index(crashed_ip_port)
         server_docs.pop(index)
         # NOTE: update other replicas if this is the first crash detected of that replica
-        background_task.add_task(broadcast_servers(server_docs))
-        
+        # This was causing problems...
+        # background_task.add_task(broadcast_servers(server_docs))
+        logger.info("Popped dead server from list in master")
+    
+    return {"Message": "ack crash of succesor"}
 
 
 @app.post("/lostConnection/")
@@ -211,7 +241,7 @@ async def transfer_conn(background_task: BackgroundTasks, data_str: str = Body()
         index = servers.index(client_IP_PORT)
         server_docs.pop(index) # remove the server from the active list of servers
         # Update the serverlist in the replicas if this is the first time a crash of this replica is detected
-        background_task.add_task(broadcast_servers(server_docs))
+        #background_task.add_task(broadcast_servers(server_docs))
 
     if not server_docs:
         return {"Error": "no servers online to connect too"}
