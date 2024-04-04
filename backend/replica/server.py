@@ -244,6 +244,9 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
     logger.info(f"{document_id} {docName}")
     doc = await read_document(s, document_id)
 
+    if editPerm == "true":
+        await websocket.send_text("*** START EDITING ***")
+    
     await websocket.send_text(doc.content)
 
     try:
