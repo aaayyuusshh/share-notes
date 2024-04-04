@@ -17,6 +17,7 @@ class ResettableTimer(object):
         self.function = function
         self.docID = docID
         self.timer = Timer(self.interval, self.function, [self.docID])
+        logger.info(f"Token generated for docID: {self.docID}")
 
     def run(self):
         self.timer.start()
@@ -25,6 +26,12 @@ class ResettableTimer(object):
         self.timer.cancel()
         self.timer = Timer(self.interval, self.function, [self.docID])
         self.timer.start()
+        logger.info(f"Resetting the timer for docID: {self.docID}")
+
+    def inUse(self):
+        #TODO: Check if a reset() call after this cancel causes problems due to canceling a
+        # canceled timer
+        self.timer.cancel()
 
 class ServerInfo:
     def __init__(self, IP_PORT: str, clients_online: int) -> None:
@@ -37,8 +44,9 @@ class OpenDocInfo:
         self.connections = conn
 
 # GLOBAL VARIABLES for instance of master server
+# NOTE: The timeout before another token is regenerated is controlled by the integer provided as the first paramater
+# to object instansiation e.g. 'ResettableTimer(20, token_timeout, docID)' time out after 20 seconds
 tokens_not_initialized = True
-#docID_list: list[int] = []
 docID_timers: dict[int, ResettableTimer] = {}
 
 # Startup event for heartbeat
@@ -114,7 +122,8 @@ def broadcast_servers(server_docs: list[ServerInfo]):
                 logger.info(docID_list)
                 # Start the 5 second timers for the tokens
                 for docID in docID_list:
-                    docID_timers[docID] = ResettableTimer(5, token_timeout, docID)
+                    docID_timers[docID] = ResettableTimer(20, token_timeout, docID)
+                    docID_timers[docID].run()
 
             # Start the token circulation
             logger.info("Reached before tokens call")
@@ -124,7 +133,7 @@ def broadcast_servers(server_docs: list[ServerInfo]):
         
         logger.info("Done broadcasting to servers")
 
-@app.post("/lostClient/{ip}/{port}")
+@app.post("/lostClient/{ip}/{port}/")
 async def lost_client(ip: str, port: str):
     server_list = [x.IP_PORT for x in server_docs]
     index = server_list.index(f"{ip}:{port}")
@@ -160,12 +169,13 @@ async def create_doc_and_conn(docName: str = Body()):
 
     # Start the 5 second timer for this new token
     global docID_timers
-    docID_timers[docID] = ResettableTimer(5, token_timeout, docID)
+    docID_timers[docID] = ResettableTimer(20, token_timeout, docID)
+    docID_timers[docID].run()
 
     return {"docID": docID, "docName": docName, "IP": server[0], "port": server[1]}
 
 
-# TODO: docID not currently used in this requestion (might be needed for tolerance)
+# TODO: docID not currently used in this request (might be needed for tolerance)
 @app.post("/connectToExistingDoc/")
 async def conn_to_existing_doc(docID: str = Body()):
     docID = int(docID)
@@ -176,6 +186,7 @@ async def conn_to_existing_doc(docID: str = Body()):
     server = str(server).split(':')
 
     return {"IP": server[0], "port": server[1]}
+
 
 @app.get("/docList/")
 def doc_list() -> Any:
@@ -190,9 +201,16 @@ def doc_list() -> Any:
 ### Functions for fault tolerance ###
 # Restart token if a timeout is reached
 def token_timeout(docID: int):
+    logger.info(f"DocID's {docID} token timedout, asking leader to generate a new token")
     server = server_docs[0].IP_PORT
     server = str(server).split(':')
     response = requests.post(f"http://{server[0]}:{server[1]}/initializeToken/{docID}/")
+
+@app.post("/tokenInUse/{docID}/")
+def token_in_use(docID: int):
+    global docID_timers
+    docID_timers[docID].inUse()
+    return {"Message": f"ack for {docID}"}
 
 
 @app.post("/replicaRecvToken/{docID}/")

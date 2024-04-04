@@ -156,6 +156,7 @@ async def initialize_token(docID: int, background_task: BackgroundTasks):
     background_task.add_task(send_token, docID)
     return {"Message": "Token initialized"}
 
+
 @app.post("/recvToken/")
 def recv_token(docID: int, background_task: BackgroundTasks):
     logger.info(f"Received token: {docID}")
@@ -163,37 +164,42 @@ def recv_token(docID: int, background_task: BackgroundTasks):
     if doc_queues[docID]:
         head = doc_queues[docID].pop(0)
         doc_permission[head] = True
-        return {f"Using the token for the following docID: {docID}"}
+        return {"Using": "true"}
     else:
         background_task.add_task(send_token, docID) # NOTE: Has to run as a background task or the calling send_token function in the ansestor waits forever
-        return {f"Do not need following id {docID}, passed it to my successor {server_list[successor]}"}
+        return {"Using": "false"}
 
 
 def send_token(docID: int):
-
+    global send_token_count
     # Inform master that you received the token before sending it
     # NOTE: CHECK THIS DOES NOT CAUSE issues, previously had problems where this will lead to deadlock as master was waiting for response
     # to initalizeTokens but then also had to process ack of receiving the token
     reply_master = requests.post(f"http://{MASTER_IP}:8000/replicaRecvToken/{docID}/")
-    logger.info(f"reply from master {send_token_count}: {reply_master}")
+    logger.info(f"reply from master (token counter {send_token_count}): {reply_master}")
 
     while True:
         try:
-            global send_token_count
             global successor
             global server_list
 
             logger.info("Sending token")
             time.sleep(0.1)
-            logger.info(f"Server_list before call to recvToken {send_token_count}: {server_list}")
+            logger.info(f"Server_list before call to recvToken (token counter {send_token_count}): {server_list}")
             with succ_lock:
                 succ_server = server_list[successor]
             reply_succ = requests.post(f"http://{succ_server}/recvToken/", params={"docID": docID})
+            reply_succ_resp = reply_succ.json()
+            logger.info(f"reply for recvToken to successor: {reply_succ_resp}")
+            if (reply_succ_resp['Using'] == "true"):
+                reply_token_use = requests.post(f"http://{MASTER_IP}:8000/tokenInUse/{docID}/")
+            
+            logger.info(f"Sent token to {succ_server} for docID {docID}")
             break # done if post request returned succesfully
         # TODO: find the correct exceptions to catch
         except Exception as e:
             # NOTE (#1): The updates to the successor are local but the rebroadcast from the master about the new ring order might
-            # from a crash of another replica, leading to this replicas ring 'reverting' to an older version
+            # be from a crash of another replica, leading to this replicas ring 'reverting' to an older version
             # this will cause another connection error but eventually the ring order given by master will settle
             # to one where all the crashed replicas have been removed
 
@@ -204,12 +210,12 @@ def send_token(docID: int):
             # token or drop it)
             
             logger.info(e)
-            logger.info(f"handling send_token exceptions {send_token_count}: {server_list}")
-            logger.info(f"Current successor {send_token_count}: {successor}")
+            logger.info(f"handling send_token exceptions (token counter {send_token_count}): {server_list}")
+            logger.info(f"Current successor (token counter {send_token_count}): {successor}")
 
             bad_ip_port = succ_server.split(':')
             reply = requests.post(f"http://{MASTER_IP}:8000/succCrashed/{bad_ip_port[0]}/{bad_ip_port[1]}/")
-            logger.info(f"Reply from master for succ crash post {send_token_count}: {reply}")
+            logger.info(f"Reply from master for succ crash post (token counter {send_token_count}): {reply}")
 
             # pop the bad succesor out of the local ring if it exists in the server list
             #  within a lock to avoid duplicate modfications
@@ -221,16 +227,15 @@ def send_token(docID: int):
                     index = server_list.index(f"{MY_IP}:{MY_PORT}")
                     successor = (index+1) % len(server_list)
 
-            logger.info(f"Successor updated to index {send_token_count}: {successor}")
+            logger.info(f"Successor updated to index (token counter {send_token_count}): {successor}")
 
             continue # try again (done in loop to avoid recursion)
-
-    send_token_count += 1
-    logger.info(f"Sent token to {server_list[successor]} for docID {docID}")
+    
+    send_token_count += 1 # for logging purposes
 
 
 # NOTE: 'editPerm' is an arugment to deal with replica crashing and allowing the client to continue editing
-@app.websocket("/ws/{document_id}/{docName}/{editPerm}")
+@app.websocket("/ws/{document_id}/{docName}/{editPerm}/")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, editPerm: str, s: Session):
     logger.info("editPerm:")
     logger.info(editPerm)
@@ -275,6 +280,7 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
                 data = json_data['content']
                 if (data == "*** STOP EDITING ***"):
                     logger.info("Client said done editing")
+                    doc_permission[websocket] = False # TODO: check if this is needed as the outer loop already does this
                     send_token(document_id)
                     break
 
@@ -301,9 +307,10 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
     except WebSocketDisconnect:
         manager.disconnect(document_id, websocket)
         # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
-        response = requests.post(f"http://{MASTER_IP}:8000/lostClient/", params={"docID": document_id})
+        response = requests.post(f"http://{MASTER_IP}:8000/lostClient/{MY_IP}/{MY_PORT}/")
+        # If client closes tab without pressing stop editing, then
         if doc_permission[websocket] == True:
-            send_token(document_id) # TODO: What to do if the client closes tab without pressing stop edit button
+            send_token(document_id)
         logger.info(response)
         # Then disconnect
 
