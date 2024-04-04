@@ -7,20 +7,28 @@ import requests
 import logging
 from threading import Lock
 import json
-from pydantic import BaseModel
+import time
 
 class ServerInfo:
-    def __init__(self, IP_PORT: str, docsOpen: int) -> None:
+    def __init__(self, IP_PORT: str, clients_online: int) -> None:
         self.IP_PORT = IP_PORT
-        self.docsOpen = docsOpen
+        self.clients_online = clients_online
 
 class OpenDocInfo:
     def __init__(self, IP_PORT: str, conn: int) -> None:
         self.IP_PORT = IP_PORT
         self.connections = conn
 
+# GLOBAL VARIABLES for instance of master server
+tokens_not_initialized = True
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    loop_servers_hearbeat()
+    yield
+
 # Create an instance of the FastAPI class
-app = FastAPI(title="Master Server")
+app = FastAPI(title="Master Server", lifespan=lifespan)
 
 # Adding CORS permissions for client
 origins = [
@@ -41,22 +49,18 @@ logger = logging.getLogger("uvicorn")
 server_docs: list[ServerInfo] = []
 lock = Lock() # NOTE: Lock is from threading, might have to use multiprocesser lock if uvicorn launches multiple processes (I don't think it does)
 
-# Tracking doc-primary_replica-clients coupling
-open_docs: dict[int, OpenDocInfo] = {}
-
-
 ### End points to deal with server requests and updates ###
 
 @app.post("/addServer/")
 async def con_server(IP: str, port: str, background_task: BackgroundTasks):
     with lock:
-        # Track number of open docs on the server
+        # Track number of clients on the server
         servers = [x.IP_PORT for x in server_docs]
         if f"{IP}:{port}" not in servers:
             server_docs.append(ServerInfo(f"{IP}:{port}", 0))
         # inform other servers that a new one joined
         background_task.add_task(broadcast_servers, server_docs)
-    return {"message": "Server added to cluster"}
+    return {"Message": "Server added to cluster"}
 
 def broadcast_servers(server_docs: list[ServerInfo]):
     server_list = [x.IP_PORT for x in server_docs] # get the IP_PORT info from the objects
@@ -64,24 +68,25 @@ def broadcast_servers(server_docs: list[ServerInfo]):
         for server in server_list:
             try:
                 server = str(server).split(':')
-                requests.post(f"http://{server[0]}:{server[1]}/updateServerList/", data=json.dumps(server_list))
+                response = requests.post(f"http://{server[0]}:{server[1]}/updateServerList/", data=json.dumps(server_list))
+                logger.info(response)
+
             except Exception as e:
                 print(f"Failed to broadcast server list to server at IP {server}: {e}")
+        
+        # tell one server to start circulating the tokens for the documents
+        global tokens_not_initialized
+        server = server_list[0].split(':')
+        if (tokens_not_initialized and len(server_list) >= 2):
+            ack = requests.post(f"http://{server[0]}:{server[1]}/initializeTokens/")
+            logger.info(ack)
+            tokens_not_initialized = False
 
-@app.post("/lostClient/")
-async def lost_client(docID: int):
-    open_docs[docID].connections -= 1 # decreament client number
-    # if no more client ... remove this docID from being active
-    if open_docs[docID].connections == 0: 
-        try: 
-            logger.info("This was the last client tracked as being connected to that docID, which has now been removed from the open_docs dictionary")
-            index = [ x.IP_PORT for x in server_docs ].index(open_docs[docID].IP_PORT)
-            server_docs[index].docsOpen -= 1 # this replica is tracking one less document (increasing it priority to take on more docs in the future)
-            open_docs.pop(docID, None) # ISSUE: Removes the key on server shutdown
-            return {"Message": "Client lose acknowledged"}
-        except ValueError:
-            return {"Error": "Could not find the replica server the document was on"} # should never run
-
+@app.post("/lostClient/{ip}/{port}")
+async def lost_client(ip: str, port: str):
+    server_list = [x.IP_PORT for x in server_docs]
+    index = server_list.index(f"{ip}:{port}")
+    server_list[index] -= 1 # Decreament client number
 
 ### End points to deal with client request ###
                 
@@ -102,31 +107,29 @@ async def create_doc_and_conn(docName: str = Body()):
     if (docID == -1):
         logger.info("Error occured with creating document")
     
-    index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
-    server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
-    open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1) # Track this document as in use and number of clients as 1
-
-    server = open_docs[docID].IP_PORT # get the IP:PORT
+    index = min(range(len(server_docs)), key=lambda i: server_docs[i].clients_online)
+    server_docs[index].clients_online += 1 # Add one more client to this replica
+    server = server_docs[index].IP_PORT
     server = str(server).split(':')
+
+    response = requests.post(f"http://{server[0]}:{server[1]}/initializeToken/{docID}/")
+    logger.info(response)
 
     return {"docID": docID, "docName": docName, "IP": server[0], "port": server[1]}
 
+
+# TODO: docID not currently used in this requestion (might be needed for tolerance)
 @app.post("/connectToExistingDoc/")
 async def conn_to_existing_doc(docID: str = Body()):
     docID = int(docID)
 
-    if docID in open_docs:
-        open_docs[docID].connections += 1 # Increment number of clients for that document by 1
-    else:
-        # Get replica server with the least amount of documents open
-        index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
-        server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
-        open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1) # Track this document as in use and number of clients as 1
-
-    server = open_docs[docID].IP_PORT # get the IP:PORT
+    index = min(range(len(server_docs)), key=lambda i: server_docs[i].clients_online)
+    server_docs[index].clients_online += 1 # Add one more client to this replica
+    server = server_docs[index].IP_PORT
     server = str(server).split(':')
 
     return {"IP": server[0], "port": server[1]}
+
 
 @app.post("/lostConnection/")
 async def transfer_conn(data_str: str = Body()):
@@ -137,33 +140,26 @@ async def transfer_conn(data_str: str = Body()):
     # server is actually dead by asking for a heartbeat 
     ip = data['IP']
     port = data['PORT']
-    docID = int(data['docID'])
+    #TODO: Again, rerouting doesn't consider the possibility the client was wrong and thus doesn't track the docID
+    docID = int(data['docID']) 
 
     global server_docs # NOTE: Need global to stop 'UnboundLocalError' as we are reassgining to server_docs within the function
+    
+    # For logging purposes 
     server_list = [x.IP_PORT for x in server_docs]
     logger.info("server_list before any if/else logic and removal of dead server")
     logger.info(server_list)
 
     client_IP_PORT = ip + ':' + port
+    server_docs = [s_doc for s_doc in server_docs if s_doc.IP_PORT != client_IP_PORT] # remove the server from the active list of servers
+    if not server_docs:
+        return {"Error": "no servers online to connect too"}
+    index = min(range(len(server_docs)), key=lambda i: server_docs[i].clients_online)
+    server_docs[index].clients_online += 1 # Add one more doc being managed by this replica
 
-    # The first request to transfer will have the same IP_PORT
-    # NOTE: (docID not in open_docs) theoretically should never be true if the server crashes in a unclean manner 
-    if (docID not in open_docs) or (open_docs[docID].IP_PORT == client_IP_PORT):
-
-        server_docs = [s_doc for s_doc in server_docs if s_doc.IP_PORT != client_IP_PORT] # remove the server from the active list of servers
-        if not server_docs:
-            return {"Error": "no servers online to connect too"}
-        # Get replica server with the least amount of documents open
-        index = min(range(len(server_docs)), key=lambda i: server_docs[i].docsOpen)
-        server_docs[index].docsOpen += 1 # Add one more doc being managed by this replica
-        open_docs[docID] = OpenDocInfo(server_docs[index].IP_PORT, 1) # new IP:PORT where the client will go to with 1 reader
-    
-    else:
-        open_docs[docID].connections += 1 # 1 more connection on the new port
-
-    server = open_docs[docID].IP_PORT # get the IP:PORT
+    server = server_docs[index].IP_PORT
     server = str(server).split(':')
-    logger.info("Server client rerouted too:")
+    logger.info("Client rerouted to:")
     logger.info(server)
 
     return {"IP": server[0], "port": server[1]}
@@ -177,3 +173,25 @@ def doc_list() -> Any:
     ret_obj = requests.get(f'http://{server_docs[0].IP_PORT.split(':')[0]}:{server_docs[0].IP_PORT.split(':')[1]}/docList/')
     logger.info(ret_obj.json())
     return ret_obj.json()
+
+# heartbeat to check if all servers in server is still alive
+def loop_servers_hearbeat():
+    while True:
+        heartbeat(server_docs)   
+        time.sleep(5) 
+
+def heartbeat(server_docs: list[ServerInfo]):
+    server_list = [x.IP_PORT for x in server_docs] # get the IP_PORT info from the objects
+    with lock:
+        for server in server_list:
+            try:
+                server = str(server).split(':')
+                response = requests.post(f"http://{server[0]}:{server[1]}/heartbeatCheck/", data={"heartbeat": "True"})
+                logger.info(response)
+
+                if response.status_code == 404:
+                    logger.info(f"Server at IP {server}")
+
+            except Exception as e:
+                print(f"Failed to broadcast heartbeat to server at IP {server}: {e}")
+    

@@ -8,6 +8,11 @@ export default function Document() {
   //const ws = useRef(null);
   const MASTER_IP = "localhost"
 
+
+  const [canEdit, setCanEdit] = useState(false);
+
+  const [isLoading, setIsLoading] = useState(false);
+
   const { ip, port, id, docName } = useParams()
 
   const [webSocket, setWebSocket] = useState(null);
@@ -26,15 +31,16 @@ export default function Document() {
     };
     ws.onmessage = (event) => {
       console.log('Message from server ', event.data);
-      // split event.data into doc content and IP
-      const indexOfFirstColon = event.data.indexOf(':');
-      const ip_received = event.data.substring(0, indexOfFirstColon);
-      console.log(ip_received===ip);
-      // check IP value sent to server
-      // if IP is different change TextValue
-      if (ip_received !== ip) {
-        setTextValue(event.data.substring(indexOfFirstColon + 1));
+      console.log('IN THE connectWebSocket function')
+      if (event.data === "*** START EDITING ***") {
+        setIsLoading(false);
+        setCanEdit(true);
       }
+      else if (!canEdit) {
+        setTextValue(event.data)
+      }
+      // Shouldn't need this as only once client can update
+      //setTextValue(event.data);
     };
 
     ws.onclose = () => {
@@ -91,28 +97,17 @@ export default function Document() {
     connectWebSocket(IP, PORT);
   };
 
-  
-  /*
-  useEffect(() => {
-    // The port is passed as a paramter in the URL, ideally it would not be shown to the user (currently not transparent)
-    ws.current = new WebSocket('ws://localhost:' + port + '/ws/' + id + '/' + docName);
-    ws.current.onopen = () => {
-      console.log('WebSocket Connected');
-    };
-    ws.current.onmessage = (event) => {
-      console.log('Message from server ', event.data);
-      setTextValue(event.data);
-    };
-    ws.current.onclose = () => {
-      console.log('WebSocket Disconnected');
-    }
-    return () => {
-      if (!ws.current) {
-        ws.current.close();
-      }
-    };
-  }, []);
-  */
+
+  const handleStartEditing = () => {
+    setIsLoading(true);
+    //NOTE: On the server side, any message sent is interpreted as a request to edit
+    webSocket.send(JSON.stringify({ startEdit: true}));
+  };
+
+  const handleStopEditing = () => {
+    setCanEdit(false);
+    webSocket.send(JSON.stringify({ content: "*** STOP EDITING ***"}));
+  };
 
   function handleUpdate(event) {
     const { value } = event.target;
@@ -120,7 +115,7 @@ export default function Document() {
 
     // Send textValue if the ws is open
     if (webSocket && webSocket.readyState === WebSocket.OPEN) {
-      webSocket.send(JSON.stringify({ content: value, ip: ip }));
+      webSocket.send(JSON.stringify({ content: value }));
     }
   }
 
@@ -132,6 +127,21 @@ export default function Document() {
       <div className="textContainer">
         <div className="container">
           <label htmlFor="textArea" className="textLabel">Your Document</label>
+          {!canEdit && (
+            <>
+              {isLoading ? (
+                // add loading gif here
+                <div>Loading...</div>
+              ) : (
+                <button onClick={handleStartEditing} className="editButton">Start Editing</button>
+              )}
+            </>
+          )}
+          {canEdit && (
+            <>
+              <button onClick={handleStopEditing} className="editButton">Stop Editing</button>
+            </>
+          )}
           <textarea
             className="textArea"
             id="textArea"
@@ -140,29 +150,10 @@ export default function Document() {
             placeholder="Start typing your document..."
             value={textValue}
             onChange={handleUpdate}
+            disabled={!canEdit} // This is causing problems
           />
         </div>
       </div>
     </div>
   );
 }
-
-// function to handle updates line by line (was overwritten in main branch had a copy in my local branch -Dvij)
-/*
-  function handleUpdate(event) {
-    const { value, selectionStart } = event.target;
-    setTextValue(value);
-
-    // Calculate the current line number and data
-    const lines = value.substr(0, selectionStart).split('\n');
-    const lineNumber = lines.length;
-    const currentLineData = lines[lines.length - 1] + value.substr(selectionStart).split('\n')[0];
-
-    console.log(`Line Number: ${lineNumber}, Line Data: '${currentLineData}'`);
-
-    // Send the line number and data if the WebSocket connection is open
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ line: lineNumber, data: currentLineData }));
-    }
-  }
-*/
