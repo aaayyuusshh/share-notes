@@ -18,6 +18,8 @@ export default function Document() {
 
   const [isReconnecting, setIsReconnecting] = useState(false);
 
+  var CAN_EDIT = false;
+
 
   useEffect(() => {
     connectWebSocket(ip, port);
@@ -27,18 +29,23 @@ export default function Document() {
     // Sending 'canEdit' will be false in everycase except when the clinet was editing and lost connection
     // In that case, the canEdit flag is used to tell the replica to generate a new token and make sure this client gets
     // first access to continue editing seamlessly
-    const ws = new WebSocket('ws://' + ip + ':' + port + '/ws/' + id + '/' + docName + '/' + canEdit + '/');
+    console.log('connect to websocket: ' + ip + ':' + port + '/ws/' + id + '/' + docName + '/' + CAN_EDIT + '/');
+    const ws = new WebSocket('ws://' + ip + ':' + port + '/ws/' + id + '/' + docName + '/' + CAN_EDIT + '/');
 
     ws.onopen = () => {
       console.log('WebSocket Connected');
     };
     ws.onmessage = (event) => {
       console.log('Message from server ', event.data);
-      console.log('IN THE connectWebSocket function')
+      console.log('IN THE connectWebSocket function');
+      setIsReconnecting(false);
+      setIsLoading(false);
+
       if (event.data === "*** START EDITING ***") {
-        setIsLoading(false);
         setCanEdit(true);
-        setIsReconnecting(false);
+        console.log("canEdit textbox " + canEdit);
+        CAN_EDIT = true;
+        console.log("CAN_EDIT " + CAN_EDIT);
       }
       else if (!canEdit) {
         setTextValue(event.data)
@@ -52,6 +59,7 @@ export default function Document() {
       setIsLoading(true);
       // canEdit can't be used as I pass it as a flag to the websocket connection
       setIsReconnecting(true); // used to gray out the textbox
+      
       requestNewIPAndPort(ip, port);
     };
 
@@ -113,6 +121,7 @@ export default function Document() {
 
   const handleStopEditing = () => {
     setCanEdit(false);
+    CAN_EDIT = false;
     webSocket.send(JSON.stringify({ content: "*** STOP EDITING ***"}));
   };
 
