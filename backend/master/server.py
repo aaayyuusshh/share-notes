@@ -22,13 +22,8 @@ class OpenDocInfo:
 # GLOBAL VARIABLES for instance of master server
 tokens_not_initialized = True
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    loop_servers_hearbeat()
-    yield
-
 # Create an instance of the FastAPI class
-app = FastAPI(title="Master Server", lifespan=lifespan)
+app = FastAPI(title="Master Server")
 
 # Adding CORS permissions for client
 origins = [
@@ -174,6 +169,8 @@ def doc_list() -> Any:
     logger.info(ret_obj.json())
     return ret_obj.json()
 
+
+"""
 # heartbeat to check if all servers in server is still alive
 def loop_servers_hearbeat():
     while True:
@@ -195,3 +192,4 @@ def heartbeat(server_docs: list[ServerInfo]):
             except Exception as e:
                 print(f"Failed to broadcast heartbeat to server at IP {server}: {e}")
     
+"""

@@ -169,9 +169,6 @@ def send_token(docID: int):
     reply = requests.post(f"http://{server_list[successor]}/recvToken/", params={"docID": docID})
     logger.info(str(reply.content))
 
-@app.post("/heartBeatCheck/")
-def heart_beat_check():
-    return {"Message": "Got hearbeat"}
 
 
 @app.websocket("/ws/{document_id}/{docName}")
