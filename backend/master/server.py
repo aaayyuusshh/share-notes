@@ -98,7 +98,9 @@ def broadcast_servers(server_docs: list[ServerInfo]):
         for server in server_list:
             try:
                 server = str(server).split(':')
+                print("Updating server list")
                 response = requests.post(f"http://{server[0]}:{server[1]}/updateServerList/", data=json.dumps(server_list))
+                print("Done update server list")
 
             except Exception as e:
                 print(f"Failed to broadcast server list to server at IP {server}: {e}")

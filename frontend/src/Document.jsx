@@ -6,7 +6,7 @@ import './App.css';
 export default function Document() {
   const [textValue, setTextValue] = useState("");
 
-  const MASTER_IP = "10.13.183.93"
+  const MASTER_IP = "10.13.135.108"
 
   const { ip, port, id, docName } = useParams()
 
@@ -47,7 +47,7 @@ export default function Document() {
         CAN_EDIT = true;
         console.log("CAN_EDIT " + CAN_EDIT);
       }
-      else if (!canEdit) {
+      else if (!CAN_EDIT) {    // FIX SOON
         setTextValue(event.data)
       }
       // Shouldn't need this as only once client can update
