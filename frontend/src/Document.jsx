@@ -6,7 +6,7 @@ import './App.css';
 export default function Document() {
   const [textValue, setTextValue] = useState("");
 
-  const MASTER_IP = "10.13.135.108"
+  const MASTER_IP = "localhost"
 
   const { ip, port, id, docName } = useParams()
 
