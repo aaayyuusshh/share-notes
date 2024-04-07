@@ -26,7 +26,7 @@ export default function Document() {
   }, []);
 
   const connectWebSocket = (ip, port) => {
-    // Sending 'canEdit' will be false in everycase except when the clinet was editing and lost connection
+    // Sending 'canEdit' will be false in everycase except when the client was editing and lost connection
     // In that case, the canEdit flag is used to tell the replica to generate a new token and make sure this client gets
     // first access to continue editing seamlessly
     console.log(

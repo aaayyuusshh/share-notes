@@ -44,7 +44,9 @@ successor = 0
 doc_queues: dict[int, list] = {}
 doc_permission: dict[WebSocket, bool] = {}
 send_token_count = 0
-succ_lock = Lock() # NOTE: Lock is from threading, might have to use multiprocesser lock if uvicorn launches multiple processes (I don't think it does)
+# NOTE: Lock is needed as multiple attempts can be made to pass tokens to a dead successor within a short time window
+# the lock avoids faulty deletes in that scenerio
+succ_lock = Lock()
 
 
 MY_PORT = os.getenv("PORT")
@@ -144,40 +146,44 @@ async def initialize_tokens(s: Session, background_task: BackgroundTasks):
     docList = await s.execute(select(Document.id, Document.name))
     logger.info(docList)
     for doc in docList:
-        print("doc", doc[0])
-        background_task.add_task(send_token, doc[0])
+        # NOTE: all tokens initially start with serial number 1
+        background_task.add_task(send_token, f"{doc[0]}:1")
     return {"Message": "Tokens initialized"}
 
 
-# Create a token ONLY for the specified docID
-@app.post("/initializeToken/{docID}/")
-async def initialize_token(docID: int, background_task: BackgroundTasks):
+# Create a token ONLY for the specified docID:serial-number
+@app.post("/initializeToken/{token}/")
+async def initialize_token(token: str, background_task: BackgroundTasks):
     logger.info("INITIALIZE TOKEN (ONE)")
-    background_task.add_task(send_token, docID)
+    background_task.add_task(send_token, token)
     return {"Message": "Token initialized"}
 
 
-@app.post("/recvToken/")
-def recv_token(docID: int, background_task: BackgroundTasks):
-    logger.info(f"Received token: {docID}")
-    
+@app.post("/recvToken/{token}/")
+def recv_token(token: str, background_task: BackgroundTasks):
+    logger.info(f"Received token: ({token})")
+    docID = token.split(':')[0]
+
     if doc_queues[docID]:
         head = doc_queues[docID].pop(0)
         doc_permission[head] = True
         return {"Using": "true"}
     else:
-        background_task.add_task(send_token, docID) # NOTE: Has to run as a background task or the calling send_token function in the ansestor waits forever
+        background_task.add_task(send_token, token) # NOTE: Has to run as a background task or the calling send_token function in the ancestor waits forever
         return {"Using": "false"}
 
 
-def send_token(docID: int):
-    global send_token_count
+def send_token(token: str):
     # Inform master that you received the token before sending it
-    # NOTE: CHECK THIS DOES NOT CAUSE issues, previously had problems where this will lead to deadlock as master was waiting for response
-    # to initalizeTokens but then also had to process ack of receiving the token
-    reply_master = requests.post(f"http://{MASTER_IP}:8000/replicaRecvToken/{docID}/")
-    logger.info(f"reply from master (token counter {send_token_count}): {reply_master}")
+    reply_master = requests.post(f"http://{MASTER_IP}:8000/replicaRecvToken/{token}/")
+    reply_master_resp = reply_master.json()
+    logger.info(f"reply from master: {reply_master_resp}")
+    # If true then this token should not be in circulation ... let it disappear silently
+    if (reply_master_resp['Token'] == "invalid"):
+        logger.info("Invalid token detected, was not propogated...")
+        return
 
+    # Loop for passing token to successor ... successfully
     while True:
         try:
             global successor
@@ -185,17 +191,17 @@ def send_token(docID: int):
 
             logger.info("Sending token")
             time.sleep(2)
-            logger.info(f"Server_list before call to recvToken (token counter {send_token_count}): {server_list}")
+            logger.info(f"Server_list before call to recvToken: {server_list}")
             with succ_lock:
                 succ_server = server_list[successor]
-            reply_succ = requests.post(f"http://{succ_server}/recvToken/", params={"docID": docID})
+            reply_succ = requests.post(f"http://{succ_server}/recvToken/{token}/")
             reply_succ_resp = reply_succ.json()
             logger.info(f"reply for recvToken to successor: {reply_succ_resp}")
             if (reply_succ_resp['Using'] == "true"):
-                reply_token_use = requests.post(f"http://{MASTER_IP}:8000/tokenInUse/{docID}/")
+                reply_token_use = requests.post(f"http://{MASTER_IP}:8000/tokenInUse/{token}/")
             
-            logger.info(f"Sent token to {succ_server} for docID {docID}")
-            break # done if post request returned succesfully
+            logger.info(f"Sent token ({token}) to {succ_server}")
+            break # done if post request returned successfully
         # TODO: find the correct exceptions to catch
         except Exception as e:
             # NOTE (#1): The updates to the successor are local but the rebroadcast from the master about the new ring order might
@@ -208,17 +214,16 @@ def send_token(docID: int):
             # passing which is incorrectly interpreded by master as a lost token (all of this could be avoided if master had a seriel
             # id associated with tokens which it checked on the 'replicaRecvToken' post request to tell replica if it should pass the
             # token or drop it)
-            
-            logger.info(e)
-            logger.info(f"handling send_token exceptions (token counter {send_token_count}): {server_list}")
-            logger.info(f"Current successor (token counter {send_token_count}): {successor}")
 
+            logger.info(f"handling send_token exceptions: {e}")
+            logger.info(f"Current successor index: {successor}")
+
+            # inform master of replica crash
             bad_ip_port = succ_server.split(':')
-            reply = requests.post(f"http://{MASTER_IP}:8000/succCrashed/{bad_ip_port[0]}/{bad_ip_port[1]}/")
-            logger.info(f"Reply from master for succ crash post (token counter {send_token_count}): {reply}")
+            reply = requests.post(f"http://{MASTER_IP}:8000/replicaCrashed/{bad_ip_port[0]}/{bad_ip_port[1]}/")
 
-            # pop the bad succesor out of the local ring if it exists in the server list
-            #  within a lock to avoid duplicate modfications
+            # pop the bad successor out of the local ring if it exists in the server list
+            # within a lock to avoid duplicate modfications
             with succ_lock:
                 if succ_server in server_list:
                     succ_index = server_list.index(succ_server)
@@ -230,8 +235,6 @@ def send_token(docID: int):
             logger.info(f"Successor updated to index (token counter {send_token_count}): {successor}")
 
             continue # try again (done in loop to avoid recursion)
-    
-    send_token_count += 1 # for logging purposes
 
 
 # NOTE: 'editPerm' is an arugment to deal with replica crashing and allowing the client to continue editing
@@ -368,13 +371,6 @@ async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, doc
 async def create_doc(docID: int, docName: str, docContent: str, s: Session):
     doc = await create_document_with_content(s, docName, docContent)
     return doc
-
-
-"""
-@app.post("/heartBeatCheck/")
-def heart_beat_check():
-    return {"Message": "Got hearbeat"}
-"""
 
 
 """

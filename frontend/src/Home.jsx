@@ -43,7 +43,6 @@ const Home = () => {
         console.log(port);
         navigate(`/document/` + IP + "/" + port + "/" + docID + "/" + docName);
       });
-    //return // Commented out
   };
 
   const navigateToExistingDocument = () => {
@@ -54,7 +53,6 @@ const Home = () => {
       header: {
         "Content-Type": "application/json",
       },
-      body: idSelected,
     })
       .then((response) => response.json())
       .then((data) => {
@@ -62,8 +60,6 @@ const Home = () => {
         const port = data.port.toString();
         console.log(IP);
         console.log(port);
-        // TODO: Pass these variabes as states (or something else, I don't really know JS...) include IP in those variables
-        // currently this only connects to 127.0.0.1 (i.e. localhost)
         navigate(
           `/document/` + IP + "/" + port + "/" + idSelected + "/" + nameSelected
         );
