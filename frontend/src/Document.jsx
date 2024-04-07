@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useParams } from "react-router-dom";
 import './App.css';
 
@@ -20,7 +20,7 @@ export default function Document() {
 
   var CAN_EDIT = false;
 
-
+  let navigate = useNavigate();
   useEffect(() => {
     connectWebSocket(ip, port);
   }, []);
@@ -135,39 +135,53 @@ export default function Document() {
     }
   }
 
+  function navigateHome(){
+    navigate(`/`);
+  }
+
   return (
-    <div className="mainContainer">
-      <nav className="navBar">
-        <h2 className="logoText">📕 {docName}</h2>
+    <div>
+      <nav style={{ backgroundColor: '#333', color: '#fff', padding: '10px', display:'flex' }}>
+        <button 
+        onClick={navigateHome}
+        style={{backgroundColor:'#333', border:'none',  marginRight:'25px' }}
+        >
+          <img 
+            src={'/imgs/homeButton.png'}
+            alt="Home" 
+            style={{width:'30px'}}
+            />
+        </button>
+        <h2 style={{ margin: '2px' }}>{docName}</h2>
       </nav>
-      <div className="textContainer">
-        <div className="container">
-          <label htmlFor="textArea" className="textLabel">Your Document</label>
+      <div>
+        <div style={{ border: 'none', padding: '15px' }}>
           {!canEdit && (
             <>
               {isLoading ? (
-                // add loading gif here
-                <div>Loading...</div>
+                <div style={{ fontStyle: 'italic', color: '#777' }}>Loading...</div>
               ) : (
-                <button onClick={handleStartEditing} className="editButton">Start Editing</button>
+                <button style={{ backgroundColor: '#4285F4', color: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', borderRadius:'20px' }} onClick={handleStartEditing}>Start Editing</button>
               )}
             </>
           )}
           {canEdit && (
             <>
-              <button onClick={handleStopEditing} className="editButton">Stop Editing</button>
+              <button style={{ backgroundColor: '#ff0040', color: '#fff', border: 'none', padding: '10px 20px', cursor: 'pointer', borderRadius:'20px'  }} onClick={handleStopEditing}>Stop Editing</button>
             </>
           )}
           <textarea
-            className="textArea"
+            style={{ height:'100%', width: '100%', padding: '10px', marginTop: '10px', border: '1px solid #ccc', borderRadius: '5px', resize: 'none' }}
             id="textArea"
-            cols="90"
-            rows="32"
+            cols="410"
+            resize
+            rows="20"
             placeholder="Start typing your document..."
             value={textValue}
             onChange={handleUpdate}
-            disabled={!canEdit || isReconnecting} // This is causing problems
+            disabled={!canEdit || isReconnecting}
           />
+          <p> {textValue.length} Characters</p>
         </div>
       </div>
     </div>
