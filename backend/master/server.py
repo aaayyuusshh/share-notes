@@ -84,6 +84,7 @@ async def con_server(IP: str, port: str, background_task: BackgroundTasks):
         servers = [x.IP_PORT for x in server_docs]
         if f"{IP}:{port}" not in servers:
             server_docs.append(ServerInfo(f"{IP}:{port}", 0))
+            servers.append(f"{IP}:{port}") # add server to local copy for leader election
         # Pick a leader (lowest port number)
         global leader_index
         ports = [int(server.split(':')[1]) for server in servers]
@@ -95,6 +96,7 @@ async def con_server(IP: str, port: str, background_task: BackgroundTasks):
 def broadcast_servers(server_docs: list[ServerInfo]):
     logger.info("Broadcasting updates to server_list")
     server_list = [x.IP_PORT for x in server_docs] # get the IP_PORT info from the objects
+    # NOTE: behind a lock to ensure multiple tokens are not initalized and that updates provided to replicas for server lists are consistant
     with server_list_lock:
         for server in server_list:
             try:
@@ -109,7 +111,8 @@ def broadcast_servers(server_docs: list[ServerInfo]):
         if (tokens_not_initialized):
 
             # Get the list of document_ids which need to be tracked from the leader replica
-            # NOTE: ADD CHECK FOR WHEN REPLICA HAS CRASHED
+            # NOTE: No check for if this server has crashed as this request is only made to the first server that just joined
+            # if it already crashed ... then the system is not in a recoverable state and will need to be restarted
             ret_obj = requests.get(f'http://{server_list[leader_index]}/docList/')
             doc_list = ret_obj.json()
 
@@ -126,8 +129,10 @@ def broadcast_servers(server_docs: list[ServerInfo]):
                     docID_timers[f"{docID}:1"].run()
 
             # Start the token circulation (done by the leader replica)
-            # NOTE: ADD CHECK FOR WHEN REPLICA HAS CRASHED
-            ack = requests.post(f"http://{server[0]}:{server[1]}/initializeTokens/")
+            # NOTE: No check for if this server has crashed as this request is only made to the first server that just joined
+            # if it already crashed ... then the system is not in a recoverable state and will need to be restarted
+            ack = requests.post(f"http://{server_list[leader_index]}/initializeTokens/")
+
             tokens_not_initialized = False
         
     logger.info("Done broadcasting updates to server_list")
@@ -180,8 +185,18 @@ async def create_doc_and_conn(docName: str = Body()):
     docID_timers[new_token].run()
 
     # starts its circulation (done by leader replica)
-    # NOTE: ADD CHECK FOR WHEN REPLICA HAS CRASHED
-    response = requests.post(f"http://{server[leader_index]}:{server[leader_index]}/initializeToken/{new_token}/")
+    # NOTE: loop to check for when replica has crashed
+    while True:
+        try:
+            leader_server = server_docs[leader_index].IP_PORT
+            response = requests.post(f"http://{leader_server}/initializeToken/{new_token}/")
+            break
+        except Exception as e:
+            logger.info(f"Failed to initalize token for new document at leader {leader_server}, removing dead server from master list and trying again")
+            ip_port = leader_server.split(':')
+            master_detect_replica_crashed(ip_port[0], ip_port[1])
+            continue
+
 
     return {"docID": docID, "docName": docName, "IP": server[0], "port": server[1]}
 
@@ -198,11 +213,18 @@ async def conn_to_existing_doc():
 @app.get("/docList/")
 def doc_list() -> Any:
     # get document list from leaders (all replicas SHOULD have the same doclist)
-    leader_server = server_docs[leader_index].IP_PORT
-    # NOTE: ADD CHECK FOR WHEN REPLICA HAS CRASHED
-    ret_obj = requests.get(f'http://{leader_server}/docList/')
-    logger.info(f"docList requested by client: {ret_obj.json()}")
-    return ret_obj.json()
+    # NOTE: loop to check for when replica has crashed
+    while True:
+        try:
+            leader_server = server_docs[leader_index].IP_PORT
+            ret_obj = requests.get(f'http://{leader_server}/docList/')
+            logger.info(f"docList requested by client: {ret_obj.json()}")
+            return ret_obj.json() # return statment acts like a break for the loop
+        except Exception as e:
+            logger.info(f"Failed to get doc list from leader ({leader_server}), removing dead server from master list and trying again")
+            ip_port = leader_server.split(':')
+            master_detect_replica_crashed(ip_port[0], ip_port[1])
+            continue
 
 
 
@@ -227,9 +249,17 @@ def token_timeout(token: str):
     docID_timers[new_token] = ResettableTimer(20, token_timeout, new_token)
     docID_timers[new_token].run()
 
-    # NOTE: ADD CHECK FOR WHEN REPLICA HAS CRASHED
-    server = server_docs[leader_index].IP_PORT
-    response = requests.post(f"http://{server}/initializeToken/{new_token}/")
+    # NOTE: loop to check for when replica has crashed
+    while True:
+        try:
+            leader_server = server_docs[leader_index].IP_PORT
+            response = requests.post(f"http://{leader_server}/initializeToken/{new_token}/")
+            break
+        except Exception as e:
+            logger.info(f"Failed to get leader ({leader_server}) to initialize new token, removing dead server from master list and trying again")
+            ip_port = leader_server.split(':')
+            master_detect_replica_crashed(ip_port[0], ip_port[1])
+            continue
 
 # Stopping the timer for this token as it is in use
 @app.post("/tokenInUse/{token}/")
@@ -256,7 +286,9 @@ def replica_crashed(crashed_ip: str, crashed_port: str):
     global server_docs
     servers = [x.IP_PORT for x in server_docs]
     if crashed_ip_port in servers:
-        server_docs.pop(servers.index(crashed_ip_port))
+        index_dead_server = servers.index(crashed_ip_port)
+        server_docs.pop(index_dead_server)
+        servers.pop(index_dead_server) # pop server from local copy for leader election
         # update leader (no effect if the popped replica was not the leader)
         global leader_index
         ports = [int(server.split(':')[1]) for server in servers]
@@ -283,7 +315,9 @@ async def transfer_conn(data_str: str = Body()):
     servers = [x.IP_PORT for x in server_docs]
 
     if crashed_ip_port in servers:
-        server_docs.pop(servers.index(crashed_ip_port))
+        index_dead_server = servers.index(crashed_ip_port)
+        server_docs.pop(index_dead_server)
+        servers.pop(index_dead_server) # pop server from local copy for leader election
         # update leader (no effect if the popped replica was not the leader)
         global leader_index
         ports = [int(server.split(':')[1]) for server in servers]
@@ -306,14 +340,16 @@ async def transfer_conn(data_str: str = Body()):
 
 
 
-### helper functions for the api (not visiable to clients)
+### helper functions for the api (not visiable to clients) ###
 def master_detect_replica_crashed(crashed_ip: str, crashed_port: str):
     crashed_ip_port = crashed_ip + ":" + crashed_port
     # find the server with that IP and port
     global server_docs
     servers = [x.IP_PORT for x in server_docs]
     if crashed_ip_port in servers:
-        server_docs.pop(servers.index(crashed_ip_port))
+        index_dead_server = servers.index(crashed_ip_port)
+        server_docs.pop(index_dead_server)
+        servers.pop(index_dead_server) # pop server from local copy for leader election
         # update leader (no effect if the popped replica was not the leader)
         global leader_index
         ports = [int(server.split(':')[1]) for server in servers]
