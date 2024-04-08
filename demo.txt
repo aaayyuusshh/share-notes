@@ -1,0 +1,31 @@
+Setup------------
+Empty databases
+Set master IP in front and backend
+Start replicas
+-----------------
+
+Start 3-4 clients to show load balancing
+
+Synchronization Part
+1. Create a document and show token being created
+2. Edit document and show changes being replicated
+3. Show editing and locking mechanism
+
+Election
+1. Connect higher port before lower port to show that leader chosen is lowest port
+2. Master will request doc list from leader (lowest port) when client connects
+
+Consistency
+1. Two clients on different machines view the same live changes being made from another client
+
+Replication
+1. Show SQLite DB's and logging of data being replicated and being broadcasted on frontend
+Can show document creation by one client shown on anothers
+
+Fault Tolerance
+1. Client editing with token and replica crashes
+
+2. Replica crashes without token
+
+3. Replica crashes with token
+

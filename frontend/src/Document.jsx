@@ -64,9 +64,9 @@ export default function Document() {
       console.log("Message from server ", event.data);
       console.log("CAN_EDIT.current status: " + CAN_EDIT.current)
       setIsReconnecting(false);
-      setIsLoading(false);
 
       if (event.data === "*** START EDITING ***") {
+        setIsLoading(false);
         CAN_EDIT.current = true;
         console.log("CAN_EDIT.current " + CAN_EDIT.current);
 
