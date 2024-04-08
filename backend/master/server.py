@@ -142,7 +142,7 @@ def broadcast_servers(server_docs: list[ServerInfo]):
 async def lost_client(ip: str, port: str):
     server_list = [x.IP_PORT for x in server_docs]
     index = server_list.index(f"{ip}:{port}")
-    server_list[index] -= 1 # Decreament client number
+    server_docs[index].clients_online -= 1 # Decreament client number
 
 
 
@@ -188,8 +188,10 @@ async def create_doc_and_conn(docName: str = Body()):
     # NOTE: loop to check for when replica has crashed
     while True:
         try:
+            global leader_index
             leader_server = server_docs[leader_index].IP_PORT
-            response = requests.post(f"http://{leader_server}/initializeToken/{new_token}/")
+            # NOTE: first token for a given document has serial number of 1
+            response = requests.post(f"http://{leader_server}/initializeToken/{docID}/1/")
             break
         except Exception as e:
             logger.info(f"Failed to initalize token for new document at leader {leader_server}, removing dead server from master list and trying again")
@@ -216,6 +218,7 @@ def doc_list() -> Any:
     # NOTE: loop to check for when replica has crashed
     while True:
         try:
+            global leader_index
             leader_server = server_docs[leader_index].IP_PORT
             ret_obj = requests.get(f'http://{leader_server}/docList/')
             logger.info(f"docList requested by client: {ret_obj.json()}")
@@ -249,11 +252,12 @@ def token_timeout(token: str):
     docID_timers[new_token] = ResettableTimer(20, token_timeout, new_token)
     docID_timers[new_token].run()
 
-    # NOTE: loop to check for when replica has crashed
+    # NOTE: loop to check for when leader has crashed
     while True:
         try:
+            global leader_index
             leader_server = server_docs[leader_index].IP_PORT
-            response = requests.post(f"http://{leader_server}/initializeToken/{new_token}/")
+            response = requests.post(f"http://{leader_server}/initializeToken/{docID}/{serial}/")
             break
         except Exception as e:
             logger.info(f"Failed to get leader ({leader_server}) to initialize new token, removing dead server from master list and trying again")
@@ -262,19 +266,21 @@ def token_timeout(token: str):
             continue
 
 # Stopping the timer for this token as it is in use
-@app.post("/tokenInUse/{token}/")
-def token_in_use(token: str):
+@app.post("/tokenInUse/{token_id}/{token_serial}/")
+def token_in_use(token_id: int, token_serial: int):
     global docID_timers
-    docID_timers[token].inUse()
-    return {"Message": f"ack for {token}"}
+    token_formatted = f"{token_id}:{token_serial}"
+    docID_timers[token_formatted].inUse()
+    return {"Message": f"ack for {token_formatted}"}
 
-@app.post("/replicaRecvToken/{token}/")
-async def replica_received_token(token: str):
+@app.post("/replicaRecvToken/{token_id}/{token_serial}/")
+async def replica_received_token(token_id: int, token_serial: int):
     global docID_timers
     global token_list
-    if token in token_list:
+    token_formatted = f"{token_id}:{token_serial}"
+    if token_formatted in token_list:
         # NOTE: token should always be in the dict (if it isn't then something went very wrong)
-        docID_timers[token].reset()
+        docID_timers[token_formatted].reset()
         return {"Token": f"valid"}
     else:
         return {"Token": f"invalid"}

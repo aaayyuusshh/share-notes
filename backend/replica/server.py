@@ -38,17 +38,18 @@ Session = Annotated[AsyncSession, Depends(session)]
 
 logger = logging.getLogger("uvicorn")
 
-# GLOBAL ARRAYS/QUEUES
+# Global arrays and queues
 server_list = []
 successor = 0
 doc_queues: dict[int, list] = {}
-doc_permission: dict[WebSocket, bool] = {}
+doc_permission: dict[WebSocket, bool] = {} # TODO: WebSockets are not hashable, can not be a dictionary
 send_token_count = 0
+serial_of_token: dict[int, int] = {}
 # NOTE: Lock is needed as multiple attempts can be made to pass tokens to a dead successor within a short time window
 # the lock avoids faulty deletes in that scenerio
 succ_lock = Lock()
 
-
+# Enviroment variables
 MY_PORT = os.getenv("PORT")
 logger.info(MY_PORT)
 
@@ -58,7 +59,7 @@ logger.info(MY_IP)
 MASTER_IP = os.getenv("MASTER_IP")
 logger.info(MASTER_IP)
 
-# TODO: DEAL with creation of documents when a replica has crashed (right now the master waits forever)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_all()
@@ -106,7 +107,7 @@ manager = ConnectionManager()
 async def create_doc_queues():
     docList = await doc_list_db()
     for doc in docList:
-        logger.info(doc[0])
+        logger.info(f"Creating empty document lists for document: {doc[0]}")
         doc_queues[int(doc[0])] = []
 
 
@@ -144,38 +145,41 @@ async def update_server_list(new_server_list: list[str]):
 async def initialize_tokens(s: Session, background_task: BackgroundTasks):
     logger.info("INITIALIZE TOKENS (ALL)")
     docList = await s.execute(select(Document.id, Document.name))
-    logger.info(docList)
+    logger.info(f"List of documents from db for which tokens will be generated: {docList}")
     for doc in docList:
         # NOTE: all tokens initially start with serial number 1
-        background_task.add_task(send_token, f"{doc[0]}:1")
+        background_task.add_task(send_token, int(doc[0]), 1)
     return {"Message": "Tokens initialized"}
 
 
 # Create a token ONLY for the specified docID:serial-number
-@app.post("/initializeToken/{token}/")
-async def initialize_token(token: str, background_task: BackgroundTasks):
+@app.post("/initializeToken/{token_id}/{token_serial}/")
+async def initialize_token(token_id: int, token_serial: int, background_task: BackgroundTasks):
     logger.info("INITIALIZE TOKEN (ONE)")
-    background_task.add_task(send_token, token)
+    background_task.add_task(send_token, token_id, token_serial)
     return {"Message": "Token initialized"}
 
 
-@app.post("/recvToken/{token}/")
-def recv_token(token: str, background_task: BackgroundTasks):
-    logger.info(f"Received token: ({token})")
-    docID = token.split(':')[0]
+@app.post("/recvToken/{token_id}/{token_serial}/")
+def recv_token(token_id: int, token_serial: int, background_task: BackgroundTasks):
+    logger.info(f"Received token: {token_id}:{token_serial}")
 
-    if doc_queues[docID]:
-        head = doc_queues[docID].pop(0)
+    if doc_queues[token_id]:
+        # NOTE: remember the serial number for the tokens you are using (needed for when you release the edit lock)
+        global serial_of_token
+        serial_of_token[token_id] = token_serial
+        # Get the websocket at the head of the queue
+        head = doc_queues[token_id].pop(0)
         doc_permission[head] = True
         return {"Using": "true"}
     else:
-        background_task.add_task(send_token, token) # NOTE: Has to run as a background task or the calling send_token function in the ancestor waits forever
+        background_task.add_task(send_token, token_id, token_serial) # NOTE: Has to run as a background task or the calling send_token function in the ancestor waits forever
         return {"Using": "false"}
 
 
-def send_token(token: str):
+def send_token(token_id: int, token_serial: int):
     # Inform master that you received the token before sending it
-    reply_master = requests.post(f"http://{MASTER_IP}:8000/replicaRecvToken/{token}/")
+    reply_master = requests.post(f"http://{MASTER_IP}:8000/replicaRecvToken/{token_id}/{token_serial}/")
     reply_master_resp = reply_master.json()
     logger.info(f"reply from master: {reply_master_resp}")
     # If true then this token should not be in circulation ... let it disappear silently
@@ -189,18 +193,18 @@ def send_token(token: str):
             global successor
             global server_list
 
-            logger.info("Sending token")
             time.sleep(2)
             logger.info(f"Server_list before call to recvToken: {server_list}")
             with succ_lock:
                 succ_server = server_list[successor]
-            reply_succ = requests.post(f"http://{succ_server}/recvToken/{token}/")
+            logger.info("Sending token")
+            reply_succ = requests.post(f"http://{succ_server}/recvToken/{token_id}/{token_serial}/")
             reply_succ_resp = reply_succ.json()
             logger.info(f"reply for recvToken to successor: {reply_succ_resp}")
             if (reply_succ_resp['Using'] == "true"):
-                reply_token_use = requests.post(f"http://{MASTER_IP}:8000/tokenInUse/{token}/")
+                reply_token_use = requests.post(f"http://{MASTER_IP}:8000/tokenInUse/{token_id}/{token_serial}/")
             
-            logger.info(f"Sent token ({token}) to {succ_server}")
+            logger.info(f"Sent token ({token_id}:{token_serial}) to {succ_server}")
             break # done if post request returned successfully
         # TODO: find the correct exceptions to catch
         except Exception as e:
@@ -232,7 +236,7 @@ def send_token(token: str):
                     index = server_list.index(f"{MY_IP}:{MY_PORT}")
                     successor = (index+1) % len(server_list)
 
-            logger.info(f"Successor updated to index (token counter {send_token_count}): {successor}")
+            logger.info(f"Successor updated to index: {successor}")
 
             continue # try again (done in loop to avoid recursion)
 
@@ -286,8 +290,9 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
                 data = json_data['content']
                 if (data == "*** STOP EDITING ***"):
                     logger.info("Client said done editing")
-                    doc_permission[websocket] = False # TODO: check if this is needed as the outer loop already does this
-                    send_token(document_id)
+                    doc_permission[websocket] = False
+                    # TODO: check if token to serial dict needs the key-value popped from it (it theortically shouldn't)
+                    send_token(document_id, serial_of_token[document_id])
                     break
 
                 logger.info("Content: ")
@@ -314,9 +319,11 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
         manager.disconnect(document_id, websocket)
         # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
         response = requests.post(f"http://{MASTER_IP}:8000/lostClient/{MY_IP}/{MY_PORT}/")
-        # If client closes tab without pressing stop editing, then
-        if doc_permission[websocket] == True:
-            send_token(document_id)
+        # If client closes tab without pressing stop editing, then pass the token along
+        # TODO: THIS IS THROWING KeyError on just checking the dictionary (might be an issue with the fact websockets are not hashable)
+        if websocket in doc_permission:
+            if doc_permission[websocket] == True:
+                send_token(document_id, serial_of_token[document_id])
         logger.info(response)
         # Then disconnect
 

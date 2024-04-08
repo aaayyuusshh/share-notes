@@ -61,7 +61,7 @@ export default function Document() {
     };
     ws.onmessage = (event) => {
       console.log("Message from server ", event.data);
-      console.log("IN THE connectWebSocket function");
+      console.log("CAN_EDIT status: " + CAN_EDIT)
       setIsReconnecting(false);
       setIsLoading(false);
 
@@ -71,7 +71,7 @@ export default function Document() {
         CAN_EDIT = true;
         console.log("CAN_EDIT " + CAN_EDIT);
       } else if (!CAN_EDIT) {
-        // FIX SOON
+        console.log("Updating textbox as this user is not editing")
         setTextValue(event.data);
       }
       // Shouldn't need this as only once client can update
@@ -145,6 +145,7 @@ export default function Document() {
   const handleStopEditing = () => {
     setCanEdit(false);
     CAN_EDIT = false;
+    console.log("CAN_EDIT after handleStopEditing: " + CAN_EDIT);
     webSocket.send(JSON.stringify({ content: "*** STOP EDITING ***" }));
   };
 
