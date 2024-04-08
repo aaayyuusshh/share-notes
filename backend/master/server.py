@@ -165,7 +165,7 @@ async def transfer_conn(data_str: str = Body()):
 def doc_list() -> Any:
     logger.info(server_docs)
     # defaulting to getting list from the first server
-    ret_obj = requests.get(f'http://{server_docs[0].IP_PORT.split(':')[0]}:{server_docs[0].IP_PORT.split(':')[1]}/docList/')
+    ret_obj = requests.get(f'http://{server_docs[0].IP_PORT.split(":")[0]}:{server_docs[0].IP_PORT.split(":")[1]}/docList/')
     logger.info(ret_obj.json())
     return ret_obj.json()
 
