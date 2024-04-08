@@ -23,9 +23,11 @@ Replication
 Can show document creation by one client shown on anothers
 
 Fault Tolerance
-1. Client editing with token and replica crashes
+1. Replica crashes without token
 
-2. Replica crashes without token
+2. Client editing with token and replica crashes
 
 3. Replica crashes with token
+
+CRASH ALL USING HARD EXIT!!
 
