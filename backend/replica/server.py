@@ -271,17 +271,16 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
                 logger.info(f"Adding websocket to queue for docID: {document_id}")
                 doc_permission[websocket] = False
             
-            # Loop the socket while you don't have permission
-            while not doc_permission[websocket]:
-                logger.info(f"{doc_permission[websocket]}")
-                logger.info("Waiting for permission")
-                await asyncio.sleep(2)
-                continue
+                # Loop the socket while you don't have permission
+                while not doc_permission[websocket]:
+                    logger.info(f"{doc_permission[websocket]}")
+                    logger.info("Waiting for permission")
+                    await asyncio.sleep(2)
+                    continue
+
+                await websocket.send_text("*** START EDITING ***")
 
             logger.info("telling client, lock acquired")
-
-            # TODO: Ensure sending this again to clients on a reconnect from a replica crash does not cause issues
-            await websocket.send_text("*** START EDITING ***")
 
             while True:
                 data = await websocket.receive_text()

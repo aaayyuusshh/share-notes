@@ -86,9 +86,11 @@ async def con_server(IP: str, port: str, background_task: BackgroundTasks):
             server_docs.append(ServerInfo(f"{IP}:{port}", 0))
             servers.append(f"{IP}:{port}") # add server to local copy for leader election
         # Pick a leader (lowest port number)
+        # NOTE: add print statment to show the leader changing
         global leader_index
         ports = [int(server.split(':')[1]) for server in servers]
         leader_index = ports.index(min(ports))
+        logger.info(f"Leader index is {leader_index} and its ip:port are {servers[leader_index]}")
         # inform other servers that a new one joined
         background_task.add_task(broadcast_servers, server_docs)
     return {"Message": "Server added to cluster"}
@@ -357,8 +359,10 @@ def master_detect_replica_crashed(crashed_ip: str, crashed_port: str):
         server_docs.pop(index_dead_server)
         servers.pop(index_dead_server) # pop server from local copy for leader election
         # update leader (no effect if the popped replica was not the leader)
+        # NOTE: add print statment to show the leader changing
         global leader_index
         ports = [int(server.split(':')[1]) for server in servers]
         leader_index = ports.index(min(ports))
+        logger.info(f"Leader index is {leader_index} and its ip:port are {servers[leader_index]}")
 
         logger.info("Popped dead server from list in master")
