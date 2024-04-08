@@ -18,11 +18,12 @@ export default function Document() {
 
   const [isReconnecting, setIsReconnecting] = useState(false);
 
-  var CAN_EDIT = false;
+  const CAN_EDIT = useRef(canEdit);
 
   let navigate = useNavigate();
   useEffect(() => {
     connectWebSocket(ip, port);
+    CAN_EDIT.current = canEdit;
   }, []);
 
   const connectWebSocket = (ip, port) => {
@@ -39,7 +40,7 @@ export default function Document() {
         "/" +
         docName +
         "/" +
-        CAN_EDIT +
+        CAN_EDIT.current +
         "/"
     );
     const ws = new WebSocket(
@@ -52,7 +53,7 @@ export default function Document() {
         "/" +
         docName +
         "/" +
-        CAN_EDIT +
+        CAN_EDIT.current +
         "/"
     );
 
@@ -61,16 +62,18 @@ export default function Document() {
     };
     ws.onmessage = (event) => {
       console.log("Message from server ", event.data);
-      console.log("CAN_EDIT status: " + CAN_EDIT)
+      console.log("CAN_EDIT.current status: " + CAN_EDIT.current)
       setIsReconnecting(false);
       setIsLoading(false);
 
       if (event.data === "*** START EDITING ***") {
+        CAN_EDIT.current = true;
+        console.log("CAN_EDIT.current " + CAN_EDIT.current);
+
         setCanEdit(true);
         console.log("canEdit textbox " + canEdit);
-        CAN_EDIT = true;
-        console.log("CAN_EDIT " + CAN_EDIT);
-      } else if (!CAN_EDIT) {
+
+      } else if (!CAN_EDIT.current) {
         console.log("Updating textbox as this user is not editing")
         setTextValue(event.data);
       }
@@ -144,8 +147,8 @@ export default function Document() {
 
   const handleStopEditing = () => {
     setCanEdit(false);
-    CAN_EDIT = false;
-    console.log("CAN_EDIT after handleStopEditing: " + CAN_EDIT);
+    CAN_EDIT.current = false;
+    console.log("CAN_EDIT.current after handleStopEditing: " + CAN_EDIT.current);
     webSocket.send(JSON.stringify({ content: "*** STOP EDITING ***" }));
   };
 
@@ -243,7 +246,6 @@ export default function Document() {
             }}
             id="textArea"
             cols="410"
-            resize
             rows="20"
             placeholder="Start typing your document..."
             value={textValue}
