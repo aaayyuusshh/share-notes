@@ -71,7 +71,7 @@ export default function Document() {
         console.log("CAN_EDIT.current " + CAN_EDIT.current);
 
         setCanEdit(true);
-        console.log("canEdit textbox " + canEdit);
+        // console.log("canEdit textbox " + canEdit);
 
       } else if (!CAN_EDIT.current) {
         console.log("Updating textbox as this user is not editing")
