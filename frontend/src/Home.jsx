@@ -8,7 +8,7 @@ const Home = () => {
   const [nameSelected, setNameSelected] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const MASTER_IP = "10.13.114.90";
+  const MASTER_IP = "localhost";
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -83,11 +83,12 @@ const Home = () => {
         className="homePage"
         style={{
           textAlign: "center",
-          padding: "20px",
           backgroundColor: "#f0f0f0",
         }}
       >
-        <h1 style={{ color: "#333" }}>Welcome to Share Notes</h1>
+        <h1 style={{ color: "#333" }}>
+          Welcome to <span class="titleText1">share</span><span class="titleText2">notes</span> 📁
+        </h1>
         <input
           type="text"
           placeholder="Provide a new document name..."
@@ -102,39 +103,34 @@ const Home = () => {
           }}
         />
         <button
+          className="createDocButton"
           disabled={!docName}
-          onClick={navigateToNewDocument}
-          style={{
-            padding: "8px 15px",
-            backgroundColor: "#4CAF50",
-            color: "white",
-            border: "none",
-            borderRadius: "20px",
-            cursor: "pointer",
-          }}
-        >
+          onClick={navigateToNewDocument}>
           Create New Doc
         </button>
       </div>
-      <div style={{ textAlign: "center", marginTop: "20px" }}>
+      <div className="documentList"style={{ textAlign: "center", marginTop: "30px", display: "flex", flexDirection: "column", alignItems: "center"}}>
         <h2 style={{ color: "#333" }}>Document List</h2>
         <input
           type="text"
-          placeholder="Search by document name..."
+          placeholder="🔍  Search by document name..."
           value={searchTerm}
           onChange={handleSearchChange}
           style={{
             padding: "8px",
             margin: "10px",
             width: "60%",
-            borderRadius: "4px",
+            borderRadius: "20px",
             border: "1px solid #ccc",
           }}
         />
         <div
           style={{
-            height: "40vh",
+            height: "50vh",
             overflowY: "auto",
+            width: "60%",
+            borderBottom: "1px solid #e1dfdf",
+            
           }}
         >
           <div
@@ -144,47 +140,46 @@ const Home = () => {
               alignItems: "center",
             }}
           >
-            {filteredDocList.map(([index, doc], i) => (
-              <button
-                key={index}
-                onClick={() => {
-                  setIdSelected(doc.id);
-                  setNameSelected(doc.name);
-                }}
-                style={{
-                  width: "60%",
-                  padding: "15px",
-                  backgroundColor: i % 2 === 0 ? "white" : "#f0f0f0",
-                  border: "none",
-                  borderRadius: "8px",
-                  marginBottom: "5px",
-                  cursor: "pointer",
-                  outline: "none",
-                  transition: "background-color 0.3s ease-in-out",
-                  ...(idSelected === doc.id && {
-                    backgroundColor: "#4285F4",
-                    color: "white",
-                  }),
-                }}
-              >
+            {filteredDocList.length === 0? (
+              <div>
+                <img className="emptyListImg" src="https://cdn-icons-png.flaticon.com/512/7486/7486744.png" alt="" />
+                <p class="emptyListTitle">Document list is currently empty</p>
+                <p class="emptyListText">Create a new doc above to add it to the document list.</p>
+              </div>
+              ) : (
+                filteredDocList.map(([index, doc], i) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setIdSelected(doc.id);
+                    setNameSelected(doc.name);
+                  }}
+                  style={{
+                    width: "60%",
+                    padding: "15px",
+                    backgroundColor: i % 2 === 0 ? "white" : "#f0f0f0",
+                    border: "none",
+                    borderRadius: "8px",
+                    marginBottom: "5px",
+                    cursor: "pointer",
+                    outline: "none",
+                    transition: "background-color 0.3s ease-in-out",
+                    ...(idSelected === doc.id && {
+                      backgroundColor: "#4285F4",
+                      color: "white",
+                    }),
+                  }}
+                >
                 {`${doc.id}: ${doc.name}`}
-              </button>
-            ))}
+                </button>
+              ))
+            )}
           </div>
         </div>
         <button
+          className="openDocButton"
           disabled={!idSelected}
-          onClick={navigateToExistingDocument}
-          style={{
-            padding: "8px 15px",
-            marginTop: "20px",
-            backgroundColor: "#4285F4",
-            color: "white",
-            border: "none",
-            borderRadius: "20px",
-            cursor: "pointer",
-          }}
-        >
+          onClick={navigateToExistingDocument}>
           Open Selected Document
         </button>
       </div>

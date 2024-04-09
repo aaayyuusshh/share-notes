@@ -32,3 +32,71 @@
 .textLabel {
   font-weight: 700;
 }
+
+.titleText1 {
+  color: rgba(255, 0, 0, 0.756);
+}
+
+.titleText2 {
+  color: rgba(0, 0, 255, 0.633);
+}
+
+.homePage {
+  padding: 20px;
+}
+
+.createDocButton {
+  padding: 8px 15px;
+  background-color: #4caf4ff0;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); 
+}
+
+.createDocButton:hover {
+  background-color: #45a049;
+  color: #f0f0f0;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2); 
+  transform: scale(1.05); 
+}
+
+.openDocButton {
+  padding: 8px 15px;
+  margin-top: 20px;
+  background-color: #4286f4;;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); 
+}
+
+.openDocButton:hover {
+  background-color: #4286f4;
+  color: #f0f0f0;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2); 
+  transform: scale(1.05); 
+}
+
+.emptyListImg {
+  width: 60%;
+  height: 60%;
+}
+
+.emptyListTitle {
+  font-size: 20px;
+}
+
+.emptyListText {
+  font-size: 15px;
+  color: rgb(113, 113, 113);
+}
+
+input:focus {
+  outline: none;
+  box-shadow: 0 0 0 1.5px rgba(112, 112, 112, 0.227);
+}
