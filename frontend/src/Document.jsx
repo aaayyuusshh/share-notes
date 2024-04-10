@@ -167,46 +167,56 @@ export default function Document() {
   }
 
   return (
-    <div>
+    <div className="rootContainer">
       <nav
-        style={{
-          backgroundColor: "#333",
-          color: "#fff",
-          padding: "10px",
-          display: "flex",
-        }}
+        className="navBar"
+        // style={{
+        //   backgroundColor: "#333",
+        //   color: "#fff",
+        //   padding: "10px",
+        //   display: "flex",
+        // }}
       >
         <button
           onClick={navigateHome}
           style={{
             backgroundColor: "#333",
             border: "none",
-            marginRight: "25px",
+            marginRight: "10px",
           }}
         >
-          <img
+          {/* <img
             src={"/imgs/homeButton.png"}
             alt="Home"
             style={{ width: "30px" }}
-          />
+          /> */}
+          <p className="logo" title="sharenotes home">📁</p>
         </button>
-        <h2 style={{ margin: "2px" }}>{docName}</h2>
+        <h2 className="docName" style={{ marginTop: "8px" }}>{docName}</h2>
       </nav>
-      <div>
-        <div style={{ border: "none", padding: "15px" }}>
+      <div className="main">
+        <div className="container" style={{ border: "none", padding: "15px" }}>
           {!canEdit && (
             <>
               {isLoading ? (
-                <div style={{ fontStyle: "italic", color: "#777" }}>
+                <button className="btn"
+                  style={{
+                    color: "black",
+                    border: "none",
+                    padding: "5px 12px",
+                    cursor: "pointer",
+                    borderRadius: "20px",
+                  }}
+                >
                   Loading...
-                </div>
+                </button>
               ) : (
-                <button
+                <button className="btn"
                   style={{
                     backgroundColor: "#4CAF50",
                     color: "#fff",
                     border: "none",
-                    padding: "10px 20px",
+                    padding: "5px 12px",
                     cursor: "pointer",
                     borderRadius: "20px",
                   }}
@@ -219,12 +229,12 @@ export default function Document() {
           )}
           {canEdit && (
             <>
-              <button
+              <button className="btn"
                 style={{
                   backgroundColor: "#ff0040",
                   color: "#fff",
                   border: "none",
-                  padding: "10px 20px",
+                  padding: "5px 12px",
                   cursor: "pointer",
                   borderRadius: "20px",
                 }}
@@ -237,22 +247,24 @@ export default function Document() {
           <textarea
             style={{
               height: "100%",
-              width: "100%",
+              width: "95%",
               padding: "10px",
               marginTop: "10px",
               border: "1px solid #ccc",
               borderRadius: "5px",
               resize: "none",
+              backgroundColor: "white",
+              overflow: "hidden"
             }}
             id="textArea"
-            cols="410"
-            rows="20"
+            cols="200"
+            rows="25"
             placeholder="Start typing your document..."
             value={textValue}
             onChange={handleUpdate}
             disabled={!canEdit || isReconnecting}
-          />
-          <p> {textValue.length} Characters</p>
+         />
+          <p className="btn">{textValue.length} Characters</p>
         </div>
       </div>
     </div>

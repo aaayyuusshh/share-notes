@@ -2,50 +2,50 @@
   padding: 10px 0 5px 0;
   color: rgb(255, 255, 255);
   background-color: rgba(61, 89, 126, 0.836);
-}
-
-.logoText {
+ }
+ 
+ .logoText {
   padding-left: 15px;
-}
-
-.textArea {
+ }
+ 
+ .textArea {
   width: 100%;
-}
-
-.textArea:focus {
+ }
+ 
+ .textArea:focus {
   resize: none;
   outline: none;
-}
-
-.mainContainer {
+ }
+ 
+ .mainContainer {
   height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-.textContainer {
+ }
+ 
+ .textContainer {
   background-color: rgb(238, 238, 238);
   flex: 1;
   padding-top: 15px;
-}
-
-.textLabel {
+ }
+ 
+ .textLabel {
   font-weight: 700;
-}
-
-.titleText1 {
+ }
+ 
+ .titleText1 {
   color: rgba(255, 0, 0, 0.756);
-}
-
-.titleText2 {
+ }
+ 
+ .titleText2 {
   color: rgba(0, 0, 255, 0.633);
-}
-
-.homePage {
+ }
+ 
+ .homePage {
   padding: 20px;
-}
-
-.createDocButton {
+ }
+ 
+ .createDocButton {
   padding: 8px 15px;
   background-color: #4caf4ff0;
   color: white;
@@ -53,17 +53,17 @@
   border-radius: 20px;
   cursor: pointer;
   transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); 
-}
-
-.createDocButton:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+ }
+ 
+ .createDocButton:hover {
   background-color: #45a049;
   color: #f0f0f0;
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2); 
-  transform: scale(1.05); 
-}
-
-.openDocButton {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+  transform: scale(1.05);
+ }
+ 
+ .openDocButton {
   padding: 8px 15px;
   margin-top: 20px;
   background-color: #4286f4;;
@@ -72,31 +72,67 @@
   border-radius: 20px;
   cursor: pointer;
   transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); 
-}
-
-.openDocButton:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+ }
+ 
+ .openDocButton:hover {
   background-color: #4286f4;
   color: #f0f0f0;
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2); 
-  transform: scale(1.05); 
-}
-
-.emptyListImg {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+  transform: scale(1.05);
+ }
+ 
+ .emptyListImg {
   width: 60%;
   height: 60%;
-}
-
-.emptyListTitle {
+ }
+ 
+ .emptyListTitle {
   font-size: 20px;
-}
-
-.emptyListText {
+ }
+ 
+ .emptyListText {
   font-size: 15px;
   color: rgb(113, 113, 113);
-}
-
-input:focus {
+ }
+ 
+ input:focus {
   outline: none;
   box-shadow: 0 0 0 1.5px rgba(112, 112, 112, 0.227);
-}
+ }
+ 
+ .logo {
+  font-size: 32px;
+ }
+ 
+ .navBar {
+  background-color: #333333;
+  color: #fff;
+  padding: 8px;
+  display: flex;
+  height: 65px;
+ }
+ 
+ .docName {
+  font-weight: 300;
+  font-size: 25px;
+ }
+
+ .container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+ }
+ 
+ textarea {
+  margin: auto;
+ }
+ 
+ .rootContainer {
+  background-color: #f0f0f0;
+ }
+
+ .btn {
+  margin-right: 1120px;
+ }
+ 
