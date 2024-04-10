@@ -8,7 +8,7 @@ const Home = () => {
   const [nameSelected, setNameSelected] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const MASTER_IP = "localhost";
+  const MASTER_IP = "10.13.86.104";
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -87,7 +87,7 @@ const Home = () => {
         }}
       >
         <h1 style={{ color: "#333" }}>
-          Welcome to <span class="titleText1">share</span><span class="titleText2">notes</span> 📁
+          Welcome to <span className="titleText1">share</span><span className="titleText2">notes</span> 📁
         </h1>
         <input
           type="text"
@@ -143,8 +143,8 @@ const Home = () => {
             {filteredDocList.length === 0? (
               <div>
                 <img className="emptyListImg" src="https://cdn-icons-png.flaticon.com/512/7486/7486744.png" alt="" />
-                <p class="emptyListTitle">Document list is currently empty</p>
-                <p class="emptyListText">Create a new doc above to add it to the document list.</p>
+                <p className="emptyListTitle">Document list is currently empty</p>
+                <p className="emptyListText">Create a new doc above to add it to the document list.</p>
               </div>
               ) : (
                 filteredDocList.map(([index, doc], i) => (
