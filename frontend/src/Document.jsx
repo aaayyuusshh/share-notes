@@ -6,7 +6,7 @@ import "./App.css";
 export default function Document() {
   const [textValue, setTextValue] = useState("");
 
-  const MASTER_IP = "10.13.86.104";
+  const MASTER_IP = "localhost";
 
   const { ip, port, id, docName } = useParams();
 
@@ -170,12 +170,6 @@ export default function Document() {
     <div className="rootContainer">
       <nav
         className="navBar"
-        // style={{
-        //   backgroundColor: "#333",
-        //   color: "#fff",
-        //   padding: "10px",
-        //   display: "flex",
-        // }}
       >
         <button
           onClick={navigateHome}
@@ -185,11 +179,7 @@ export default function Document() {
             marginRight: "10px",
           }}
         >
-          {/* <img
-            src={"/imgs/homeButton.png"}
-            alt="Home"
-            style={{ width: "30px" }}
-          /> */}
+
           <p className="logo" title="sharenotes home">📁</p>
         </button>
         <h2 className="docName" style={{ marginTop: "8px" }}>{docName}</h2>

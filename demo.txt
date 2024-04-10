@@ -23,9 +23,9 @@ Replication
 Can show document creation by one client shown on anothers
 
 Fault Tolerance
-1. Replica crashes without token
+1. Client editing with token and replica crashes
 
-2. Client editing with token and replica crashes
+2. Replica crashes without token
 
 3. Replica crashes with token and no client
 -- Heartbeat case, crash replica after "reply from master"
