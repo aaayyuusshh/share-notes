@@ -1,14 +1,12 @@
-from fastapi import Depends, Body, FastAPI, WebSocket, WebSocketDisconnect, status, BackgroundTasks
+from fastapi import Body, FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from typing import Optional, Annotated, List, Any
+from typing import Any
 import requests
 import logging
 from threading import Lock, Timer
 import json
 
 
-# From: https://stackoverflow.com/questions/56167390/resettable-timer-object-implementation-python
 # NOTE: The timeout before another token is regenerated is controlled by the integer provided as the first parameter
 # to object instansiation e.g. 'ResettableTimer(20, token_timeout, docID)' time out after 20 seconds
 class ResettableTimer(object):
@@ -86,7 +84,6 @@ async def con_server(IP: str, port: str, background_task: BackgroundTasks):
             server_docs.append(ServerInfo(f"{IP}:{port}", 0))
             servers.append(f"{IP}:{port}") # add server to local copy for leader election
         # Pick a leader (lowest port number)
-        # NOTE: add print statment to show the leader changing
         global leader_index
         ports = [int(server.split(':')[1]) for server in servers]
         leader_index = ports.index(min(ports))
@@ -144,7 +141,7 @@ def broadcast_servers(server_docs: list[ServerInfo]):
 async def lost_client(ip: str, port: str):
     server_list = [x.IP_PORT for x in server_docs]
     index = server_list.index(f"{ip}:{port}")
-    server_docs[index].clients_online -= 1 # Decreament client number
+    server_docs[index].clients_online -= 1 # Decrement client number
 
 
 
@@ -246,7 +243,7 @@ def token_timeout(token: str):
     # Get token info
     docID = token.split(':')[0]
     serial = int(token.split(':')[1])
-    serial += 1 #increament serial counter
+    serial += 1 # increament serial counter
 
     # Track and start the new token
     new_token = f"{docID}:{serial}"

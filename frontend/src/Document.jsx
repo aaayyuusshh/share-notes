@@ -84,7 +84,7 @@ export default function Document() {
     ws.onclose = () => {
       console.log("WebSocket disconnected");
       setIsLoading(true);
-      // canEdit can't be used as I pass it as a flag to the websocket connection
+
       setIsReconnecting(true); // used to gray out the textbox
 
       requestNewIPAndPort(ip, port);

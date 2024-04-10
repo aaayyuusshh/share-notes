@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from typing import Annotated, List, Any, Tuple, Dict
-from fastapi import Depends, Body, FastAPI, WebSocket, WebSocketDisconnect, Query, BackgroundTasks
+from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import logging
@@ -17,14 +17,12 @@ from db import (
     read_document,
     session,
     update_document,
-    create_repl_document,
     doc_list_db
 )
 import websockets
 import requests
 import time
 import asyncio
-from collections import defaultdict
 from threading import Lock
 
 # alternative to directly defining paramter type
@@ -42,7 +40,7 @@ logger = logging.getLogger("uvicorn")
 server_list = []
 successor = 0
 doc_queues: dict[int, list] = {}
-doc_permission: dict[WebSocket, bool] = {} # TODO: WebSockets are not hashable, can not be a dictionary
+doc_permission: dict[WebSocket, bool] = {}
 send_token_count = 0
 serial_of_token: dict[int, int] = {}
 # NOTE: Lock is needed as multiple attempts can be made to pass tokens to a dead successor within a short time window
@@ -110,14 +108,14 @@ async def create_doc_queues():
         logger.info(f"Creating empty document lists for document: {doc[0]}")
         doc_queues[int(doc[0])] = []
 
-
+# Http post request to create a new document
 @app.post("/newDocID/{docName}/")
 async def create_docID(s: Session, docName: str):
     docID = await create_document(s, docName)
     doc_queues[docID] = [] # create queue for docID
     return {"docID": docID}
 
-
+# Http post request to get docList
 @app.get("/docList/", response_model=List[DocumentList])
 async def doc_list(s: Session) -> Any:
     docList = await s.execute(select(Document.id, Document.name))
@@ -159,7 +157,7 @@ async def initialize_token(token_id: int, token_serial: int, background_task: Ba
     background_task.add_task(send_token, token_id, token_serial)
     return {"Message": "Token initialized"}
 
-
+# Handle recieving token
 @app.post("/recvToken/{token_id}/{token_serial}/")
 def recv_token(token_id: int, token_serial: int, background_task: BackgroundTasks):
     logger.info(f"Received token: {token_id}:{token_serial}")
@@ -176,7 +174,7 @@ def recv_token(token_id: int, token_serial: int, background_task: BackgroundTask
         background_task.add_task(send_token, token_id, token_serial) # NOTE: Has to run as a background task or the calling send_token function in the ancestor waits forever
         return {"Using": "false"}
 
-
+# Handle sending token
 def send_token(token_id: int, token_serial: int):
     # Inform master that you received the token before sending it
     reply_master = requests.post(f"http://{MASTER_IP}:8000/replicaRecvToken/{token_id}/{token_serial}/")
@@ -241,7 +239,6 @@ def send_token(token_id: int, token_serial: int):
             continue # try again (done in loop to avoid recursion)
 
 
-# NOTE: 'editPerm' is an arugment to deal with replica crashing and allowing the client to continue editing
 @app.websocket("/ws/{document_id}/{docName}/{editPerm}/")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, editPerm: str, s: Session):
     logger.info("editPerm:")
@@ -346,7 +343,7 @@ async def connect_to_replica(document_id: int, docName: str, content: str, IP: s
         print(f"An error occurred: {e}")
         raise
 
-
+# websocket connections for replication
 @app.websocket("/replica/ws/{document_id}/{docName}")
 async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, s: Session):
     await manager.connect(document_id, websocket)
@@ -372,20 +369,8 @@ async def replica_websocket_endpoint(websocket: WebSocket, document_id: int, doc
         manager.disconnect(document_id, websocket)
         print(f"Connection closed with exception")
 
-# For testing
+# For demoing
 @app.post("/createDoc/", response_model=Document)
 async def create_doc(docID: int, docName: str, docContent: str, s: Session):
     doc = await create_document_with_content(s, docName, docContent)
     return doc
-
-
-"""
-@app.get("/users/")
-async def get_users(s: Session) -> list[User]:
-    return await read_users(s)
-
-
-@app.post("/users/")
-async def post_user(s: Session, uc: UserCreate) -> User:
-    return await create_user(s, uc)
-"""

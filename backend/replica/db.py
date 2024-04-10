@@ -131,31 +131,3 @@ def set_sqlite_pragma(dbapi_connection: Connection, _connection_record):
 async def create_all():
     async with connect() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
-
-
-"""
-class UserBase(SQLModel):
-    username: str
-    password: str
-
-
-class UserCreate(UserBase):
-    pass
-
-
-class User(UserBase, table=True):
-    id: int = Field(primary_key=True)
-
-
-async def read_users(s: AsyncSession):
-    res = await s.execute(select(User))
-    users = res.scalars().all()
-    return users
-
-
-async def create_user(s: AsyncSession, uc: UserCreate):
-    user = User(**uc.model_dump(exclude_unset=True))
-    s.add(user)
-    await s.commit()
-    return user
-"""
