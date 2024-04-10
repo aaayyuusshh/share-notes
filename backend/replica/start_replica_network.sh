@@ -3,9 +3,9 @@
 echo "PORT: $1"
 export PORT=$1;
 # enter the IP address of network connection for the replica
-export IP="10.14.160.33";
+export IP="10.13.114.90";
 # enter the IP address of network connection for the master server
-export MASTER_IP="10.14.160.33";
+export MASTER_IP="10.13.114.90";
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
