@@ -6,6 +6,8 @@
 
 # Start Instructions
 
+Running this application using the following instructions requires a MacOS or Linux machine.
+
 ## First start the Backend 🏗️
 
 To start the backend, we must start the master server first.
@@ -21,7 +23,7 @@ To start the replica servers, navigate to the `backend/replica` directory and ex
 ```bash
 ./start_replica_local.sh 8001
 ```
-These commands run the master backend server on port 8000 and replication servers on port 8001. More replica servers can be started using the above command with different port number.
+These commands run the master backend server on port 8000 and replication servers on port 8001. As many replica servers as required can be started using the above command with different port number.
 
 ## Running the Frontend 🌐
 To run the frontend, navigate to the frontend directory and run the following commands. Also ensure the `MASTER_IP` variable in the `Home.jsx` and `Document.jsx` components is set to `localhost`.

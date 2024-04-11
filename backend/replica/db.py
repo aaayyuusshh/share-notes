@@ -33,7 +33,6 @@ class DocumentUpdate(DocumentBase):
     content: Optional[str]
 
 
-# NOTE: Remove this later for me the settings file does not work so I got the enviroment variable instead
 MY_PORT = os.getenv('PORT')
 
 REPLICA_DIR = Path(__file__).parent.resolve() / "dbs"
@@ -97,7 +96,6 @@ async def create_document_with_content(s: AsyncSession, docName: str, docContent
     return doc
 
 
-# Causes errors
 async def doc_list_db():
     async with SessionMaker() as s:
         doc_list = await s.execute(select(Document.id))
