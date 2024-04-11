@@ -8,7 +8,7 @@ const Home = () => {
   const [nameSelected, setNameSelected] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const MASTER_IP = "10.13.67.149";
+  const MASTER_IP = "10.13.63.43";
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
