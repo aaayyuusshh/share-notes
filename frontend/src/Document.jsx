@@ -83,7 +83,6 @@ export default function Document() {
 
     ws.onclose = () => {
       console.log("WebSocket disconnected");
-      setIsLoading(true);
 
       setIsReconnecting(true); // used to gray out the textbox
 
