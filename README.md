@@ -1,6 +1,10 @@
-# Share Notes 📚🚀
+# sharenotes 📚🚀
 
-#### Follow these instricutions to run this distributed application:
+<img width="1438" alt="Screen Shot 2024-04-11 at 12 43 49 AM" src="https://github.com/aaayyuusshh/share-notes/assets/80851741/d007d964-e9d0-480c-bcce-3c2cc535f2a0">
+<img width="1438" alt="Screen Shot 2024-04-11 at 12 45 34 AM" src="https://github.com/aaayyuusshh/share-notes/assets/80851741/4f45f4c7-1c7b-4999-afa2-d185e7a91258">
+
+
+# Start Instructions
 
 ## First start the Backend 🏗️
 
@@ -26,3 +30,4 @@ To run the frontend, navigate to the frontend directory and run the following co
 npm install
 npm run dev
 ```
+
