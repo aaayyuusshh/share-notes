@@ -231,6 +231,9 @@ def send_token(token_id: int, token_serial: int):
 
 @app.websocket("/ws/{document_id}/{docName}/{editPerm}/")
 async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: str, editPerm: str, s: Session):
+    global server_list
+    global successor
+
     logger.info("editPerm:")
     logger.info(editPerm)
     await manager.connect(document_id, websocket)
@@ -296,10 +299,14 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
                     try:
                         response = await connect_to_replica(document_id, docName, doc.content, server[0], server[1])
                     except TimeoutError:
-                        server_list.remove(server_info)
-                        logger.info("Server_list after removing server which caused the time out: ")
-                        logger.info(server_list)
-                        continue
+                        if server_info in server_list:
+                            server_list.remove(server_info)
+                            logger.info("Server_list after removing server which caused the time out: ")
+                            logger.info(server_list)
+                            # set new successor
+                            index = server_list.index(f"{MY_IP}:{MY_PORT}")
+                            successor = (index+1) % len(server_list)
+                            continue
     except WebSocketDisconnect:
         manager.disconnect(document_id, websocket)
         # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
