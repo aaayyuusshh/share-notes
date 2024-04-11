@@ -27,8 +27,6 @@ class ResettableTimer(object):
         logger.info(f"Resetting the timer for token: {self.tokenID}")
 
     def inUse(self):
-        #TODO: Check if a reset() call after this cancel causes problems due to canceling a
-        # canceled timer
         self.timer.cancel()
         logger.info(f"Marking token as in use (stopping its timer): {self.tokenID}")
 
@@ -43,12 +41,11 @@ class ServerInfo:
 leader_index = 0
 # Tracking servers in the cluster
 server_docs: list[ServerInfo] = []
-server_list_lock = Lock() # NOTE: Precautionary lock to syncronize modification of of the server list
+server_list_lock = Lock() # NOTE: Precautionary lock to syncronize modification of the server list
 # Managing and tracking tokens
 tokens_not_initialized = True
 docID_timers: dict[str, ResettableTimer] = {}
 token_list: list[str] = []
-
 
 
 # Create an instance of the FastAPI class
@@ -71,6 +68,7 @@ logger = logging.getLogger("uvicorn")
 
 
 ### End points to deal with server additions and updates ###
+# Add replica to list of current servers
 @app.post("/addServer/")
 async def con_server(IP: str, port: str, background_task: BackgroundTasks):
     # Basic error checking
@@ -92,6 +90,7 @@ async def con_server(IP: str, port: str, background_task: BackgroundTasks):
         background_task.add_task(broadcast_servers, server_docs)
     return {"Message": "Server added to cluster"}
 
+# Broadcast changes to replica list to all replicas
 def broadcast_servers(server_docs: list[ServerInfo]):
     logger.info("Broadcasting updates to server_list")
     server_list = [x.IP_PORT for x in server_docs] # get the IP_PORT info from the objects
@@ -145,7 +144,8 @@ async def lost_client(ip: str, port: str):
 
 
 
-### End points to deal with client request ###     
+### End points to deal with client request ###
+# Create a new document in the dbs and connect clinet to a replica     
 @app.post("/createDocAndConnect/")
 async def create_doc_and_conn(docName: str = Body()):
     global server_docs
@@ -201,6 +201,7 @@ async def create_doc_and_conn(docName: str = Body()):
 
     return {"docID": docID, "docName": docName, "IP": server[0], "port": server[1]}
 
+# Connect client to an existing document
 @app.post("/connectToExistingDoc/")
 async def conn_to_existing_doc():
     # Get replica with the fewest clients
@@ -211,9 +212,9 @@ async def conn_to_existing_doc():
 
     return {"IP": server[0], "port": server[1]}
 
+# Get document list from leaders (all replicas SHOULD have the same doclist)
 @app.get("/docList/")
 def doc_list() -> Any:
-    # get document list from leaders (all replicas SHOULD have the same doclist)
     # NOTE: loop to check for when replica has crashed
     while True:
         try:
@@ -272,6 +273,7 @@ def token_in_use(token_id: int, token_serial: int):
     docID_timers[token_formatted].inUse()
     return {"Message": f"ack for {token_formatted}"}
 
+# Notification of maser to reset the timer for the provided token
 @app.post("/replicaRecvToken/{token_id}/{token_serial}/")
 async def replica_received_token(token_id: int, token_serial: int):
     global docID_timers
@@ -284,6 +286,7 @@ async def replica_received_token(token_id: int, token_serial: int):
     else:
         return {"Token": f"invalid"}
 
+# Replicas reporting to master about crashes of other replicas
 @app.post("/replicaCrashed/{crashed_ip}/{crashed_port}/")
 def replica_crashed(crashed_ip: str, crashed_port: str):
     crashed_ip_port = crashed_ip + ":" + crashed_port
@@ -303,7 +306,7 @@ def replica_crashed(crashed_ip: str, crashed_port: str):
     
     return {"Message": "ack crash of succesor"}
 
-
+# Clients asking to be rerouted to a new replica upon being disconnected
 @app.post("/lostConnection/")
 async def transfer_conn(data_str: str = Body()):
     data = json.loads(data_str)
