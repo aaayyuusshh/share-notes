@@ -6,6 +6,8 @@
 
 # Start Instructions
 
+Running this application using the following instructions requires a MacOS or Linux machine.
+
 ## First start the Backend 🏗️
 
 To start the backend, we must start the master server first.
