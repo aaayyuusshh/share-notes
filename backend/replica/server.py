@@ -163,7 +163,7 @@ def recv_token(token_id: int, token_serial: int, background_task: BackgroundTask
     logger.info(f"Received token: {token_id}:{token_serial}")
 
     if doc_queues[token_id]:
-        # NOTE: remember the serial number for the tokens you are using (needed for when you release the edit lock)
+        # NOTE: Have to remember the serial number for the tokens you are using (needed for when you release the edit lock)
         global serial_of_token
         serial_of_token[token_id] = token_serial
         # Get the websocket at the head of the queue
@@ -204,18 +204,8 @@ def send_token(token_id: int, token_serial: int):
             
             logger.info(f"Sent token ({token_id}:{token_serial}) to {succ_server}")
             break # done if post request returned successfully
-        # TODO: find the correct exceptions to catch
+        
         except Exception as e:
-            # NOTE (#1): The updates to the successor are local but the rebroadcast from the master about the new ring order might
-            # be from a crash of another replica, leading to this replicas ring 'reverting' to an older version
-            # this will cause another connection error but eventually the ring order given by master will settle
-            # to one where all the crashed replicas have been removed
-
-            # NOTE (#2): Ensure the timeout for lost tokens in master is 4 magnitudes greater at minimum then the sleep time between
-            # receiving and passing tokens to avoid the issue of timeouts caused by replicas crashing leading to a delay in token
-            # passing which is incorrectly interpreded by master as a lost token (all of this could be avoided if master had a seriel
-            # id associated with tokens which it checked on the 'replicaRecvToken' post request to tell replica if it should pass the
-            # token or drop it)
 
             logger.info(f"handling send_token exceptions: {e}")
             logger.info(f"Current successor index: {successor}")
@@ -287,7 +277,6 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
                 if (data == "*** STOP EDITING ***"):
                     logger.info("Client said done editing")
                     doc_permission[websocket] = False
-                    # TODO: check if token to serial dict needs the key-value popped from it (it theortically shouldn't)
                     send_token(document_id, serial_of_token[document_id])
                     break
 
@@ -316,7 +305,6 @@ async def websocket_endpoint(websocket: WebSocket, document_id: int, docName: st
         # Inform server you lost a connection from a client (NOTE: Master is hard coded to be on localhost port 8000)
         response = requests.post(f"http://{MASTER_IP}:8000/lostClient/{MY_IP}/{MY_PORT}/")
         # If client closes tab without pressing stop editing, then pass the token along
-        # TODO: THIS IS THROWING KeyError on just checking the dictionary (might be an issue with the fact websockets are not hashable)
         if websocket in doc_permission:
             if doc_permission[websocket] == True:
                 send_token(document_id, serial_of_token[document_id])
