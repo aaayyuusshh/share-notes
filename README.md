@@ -1,7 +1,13 @@
 # sharenotes 📚🚀
+Note taking app, inspired by Google Docs, that allows real time, collaborative note-taking.
 
 <img width="1438" alt="Screen Shot 2024-04-11 at 12 43 49 AM" src="https://github.com/aaayyuusshh/share-notes/assets/80851741/d007d964-e9d0-480c-bcce-3c2cc535f2a0">
 <img width="1438" alt="Screen Shot 2024-04-11 at 12 45 34 AM" src="https://github.com/aaayyuusshh/share-notes/assets/80851741/4f45f4c7-1c7b-4999-afa2-d185e7a91258">
+
+---
+
+# Architecture
+<img width="1143" height="737" alt="Screenshot 2025-07-29 at 5 30 04 PM" src="https://github.com/user-attachments/assets/4df6329a-4878-47e8-b44d-4add61a07dde" />
 
 
 # Start Instructions
